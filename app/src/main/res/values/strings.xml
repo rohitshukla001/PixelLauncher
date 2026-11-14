@@ -59,4 +59,7 @@
     <string name="choose_language">Choose language</string>
     <string name="set_as_default_home">Set Pixel Launcher as default home app</string>
     <string name="version">Version %1$s</string>
+    <string name="home_wallpaper_changed">Home wallpaper changed</string>
+    <string name="lock_screen_blocked">The lock screen wallpaper can\'t be changed on this device. Its administrator blocks wallpaper changes for every app, including the device\'s own wallpaper apps.</string>
+    <string name="ok">OK</string>
 </resources>

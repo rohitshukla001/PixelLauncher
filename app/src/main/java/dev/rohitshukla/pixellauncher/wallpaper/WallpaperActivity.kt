@@ -45,6 +45,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -53,6 +54,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -94,12 +96,16 @@ import kotlinx.coroutines.withContext
 /**
  * Yomo's wallpaper screens. First run: "Choose wallpaper" from the built-in ones, then Continue.
  * From Settings: the same choices plus "Set custom wallpaper" (pick a photo, crop it), then Submit.
- * Only the home screen wallpaper changes; the lock screen keeps its own (Yomo's FAQ explains why).
- * Phones that block wallpaper changes still get it: the launcher draws it behind home.
+ * Submit sets both the home screen and the lock screen wallpaper (Yomo sets home only). Phones that
+ * block wallpaper changes still get it on home, drawn by the launcher; their lock screen cannot be
+ * changed by any app (Yomo's FAQ says the same).
  */
 class WallpaperActivity : ComponentActivity() {
 
     private var applying by mutableStateOf(false)
+
+    /** Set after Submit on a device whose policy blocks wallpaper changes: home changed, the lock screen could not. */
+    private var lockScreenBlocked by mutableStateOf(false)
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLanguage.wrap(newBase))
@@ -122,15 +128,16 @@ class WallpaperActivity : ComponentActivity() {
                         },
                         onCustom = { make -> apply(firstRun, OwnWallpaper.Custom(System.currentTimeMillis()), make) },
                     )
+                    if (lockScreenBlocked) LockScreenBlockedNotice(onDismiss = ::finish)
                 }
             }
         }
     }
 
     /**
-     * As Yomo does: set the system wallpaper when the phone allows it. When it doesn't (an admin or a
+     * Set the home and lock screen wallpaper when the phone allows it. When it doesn't (an admin or a
      * restriction blocks it, or the phone refuses), keep the choice and draw it behind home instead,
-     * so it still looks changed. The lock screen and Recents keep the system wallpaper either way.
+     * as Yomo does, so home still looks changed; the lock screen then stays as it is.
      */
     private fun apply(firstRun: Boolean, choice: OwnWallpaper, make: () -> Bitmap?) {
         if (applying) return
@@ -138,6 +145,8 @@ class WallpaperActivity : ComponentActivity() {
         lifecycleScope.launch {
             val settings = AppData.settings(this@WallpaperActivity)
             var error: Throwable? = null
+            // True when the launcher has to draw it: home changed, the lock screen did not.
+            var drawnByLauncher = false
             val done = withContext(Dispatchers.Default) {
                 val bitmap = try {
                     make()
@@ -154,6 +163,7 @@ class WallpaperActivity : ComponentActivity() {
                         File(filesDir, OwnWallpaper.FILE_NAME).outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }
                     }
                     settings.setOwnWallpaper(choice)
+                    drawnByLauncher = true
                     true
                 } catch (e: java.io.IOException) {
                     error = e
@@ -161,26 +171,34 @@ class WallpaperActivity : ComponentActivity() {
                 }
             }
             applying = false
+            // "Successfully changed" only when Android confirmed home and lock screen; a drawn-by-launcher
+            // home gets its own, accurate notice below.
             if (done) {
-                if (!firstRun) Toast.makeText(this@WallpaperActivity, R.string.wallpaper_changed, Toast.LENGTH_SHORT).show()
+                if (!firstRun && !drawnByLauncher) Toast.makeText(this@WallpaperActivity, R.string.wallpaper_changed, Toast.LENGTH_SHORT).show()
             } else {
                 Log.w(TAG, "Changing the wallpaper failed", error)
                 Toast.makeText(this@WallpaperActivity, getString(R.string.wallpaper_not_changed) + debugDetail(error), Toast.LENGTH_LONG).show()
             }
-            // First run never traps you; from Settings, a failure leaves you on the screen to try again.
-            if (done || firstRun) {
-                if (firstRun) settings.completeSetup()
-                finish()
+            // First run never traps you: it completes even when the wallpaper could not change.
+            if (firstRun) settings.completeSetup()
+            when {
+                // Home changed but the lock screen could not: say so before closing.
+                drawnByLauncher -> lockScreenBlocked = true
+                // From Settings, a failure leaves you on the screen to try again.
+                done || firstRun -> finish()
             }
         }
     }
 
-    /** False when the phone does not allow it or refuses (Yomo treats a zero id as refused too). */
+    /**
+     * Home and lock screen together, in one write. False when the phone does not allow it or refuses
+     * (Yomo treats a zero id as refused too).
+     */
     private fun setSystemWallpaper(bitmap: Bitmap): Boolean {
         val manager = WallpaperManager.getInstance(this)
         if (!manager.isSetWallpaperAllowed) return false
         return try {
-            manager.setBitmap(bitmap, null, true, WallpaperManager.FLAG_SYSTEM) != 0
+            manager.setBitmap(bitmap, null, true, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK) != 0
         } catch (e: Exception) {
             Log.w(TAG, "The phone refused the system wallpaper; drawing it in the launcher instead", e)
             false
@@ -401,6 +419,21 @@ internal fun sampleSize(width: Int, height: Int, screenWidth: Int, screenHeight:
     var sample = 1
     while (width / (sample * 2) >= screenWidth && height / (sample * 2) >= screenHeight) sample *= 2
     return sample
+}
+
+/**
+ * After Submit on a device whose policy blocks wallpaper changes. Home changed (drawn by the launcher),
+ * but the lock screen cannot be changed by any app there: the system's own wallpaper apps are blocked
+ * too, even when they report success. Only the device's administrator can allow it.
+ */
+@Composable
+private fun LockScreenBlockedNotice(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.home_wallpaper_changed)) },
+        text = { Text(stringResource(R.string.lock_screen_blocked)) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok)) } },
+    )
 }
 
 /** As in Yomo, the chosen wallpaper grows slightly. */

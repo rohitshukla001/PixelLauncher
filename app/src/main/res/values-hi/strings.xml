@@ -59,4 +59,7 @@
     <string name="choose_language">भाषा चुनें</string>
     <string name="set_as_default_home">Pixel Launcher को डिफ़ॉल्ट होम ऐप बनाएं</string>
     <string name="version">संस्करण %1$s</string>
+    <string name="home_wallpaper_changed">होम वॉलपेपर बदल दिया गया</string>
+    <string name="lock_screen_blocked">इस डिवाइस पर लॉक स्क्रीन वॉलपेपर नहीं बदला जा सकता। इसके एडमिनिस्ट्रेटर ने सभी ऐप्स के लिए वॉलपेपर बदलना बंद किया है, डिवाइस के अपने वॉलपेपर ऐप्स के लिए भी।</string>
+    <string name="ok">ठीक है</string>
 </resources>
