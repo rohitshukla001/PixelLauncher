@@ -4,7 +4,7 @@ A minimal Android home screen in Kotlin and Jetpack Compose, modelled on the fea
 
 Yomo's documented behaviour (its FAQ, on-screen text and observable behaviour) is the spec. None of Yomo's code, images or branding is used. The decompiled Yomo reference in `base/`, `jadx/`, `xapk/` and `manifest.txt` is for reading only and is excluded from git.
 
-> The name is a working title. Google's own launcher on Pixel phones is also called "Pixel Launcher", and "Pixel" is a Google trademark. Pick a different name before publishing.
+> Google's own launcher on Pixel phones is also called "Pixel Launcher". On those phones, Android's Default home app list shows both; this one has the blue grid icon. The app is not meant for Google Play, where the name would conflict with Google's trademark.
 
 ## Features
 
