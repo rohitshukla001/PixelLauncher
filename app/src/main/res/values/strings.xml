@@ -46,17 +46,9 @@
     <string name="wallpaper_number">Wallpaper %1$d</string>
     <string name="wallpaper_changed">Wallpaper successfully changed</string>
     <string name="wallpaper_not_changed">Couldn\'t change the wallpaper</string>
-    <string name="add_shortcuts_page">Add shortcuts page</string>
-    <string name="remove_shortcuts_page">Remove shortcuts page</string>
-    <string name="added_shortcut_page">Added shortcut page</string>
-    <string name="cannot_add_shortcut_page">Cannot add more shortcut pages</string>
-    <string name="removed_shortcut_page">Removed last shortcut page</string>
-    <string name="cannot_remove_shortcut_page">Cannot remove the only shortcut page</string>
-    <string name="no_room_to_remove_page">Not enough free space on the other pages for this page\'s apps</string>
     <string name="enable_search_bar">Enable search bar</string>
-    <string name="enable_app_suggestions">Enable app suggestions</string>
-    <string name="change_language">Change language</string>
-    <string name="choose_language">Choose language</string>
     <string name="set_as_default_home">Set Pixel Launcher as default home app</string>
     <string name="version">Version %1$s</string>
+    <string name="footer_credit_prefix" translatable="false">"Design and Developed by "</string>
+    <string name="footer_author" translatable="false">Rohit Shukla</string>
 </resources>

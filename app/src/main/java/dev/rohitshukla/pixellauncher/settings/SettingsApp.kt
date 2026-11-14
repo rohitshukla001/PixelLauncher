@@ -19,15 +19,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.outlined.AddCircle
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.ui.semantics.Role
 import dev.rohitshukla.pixellauncher.data.LauncherSettings
-import dev.rohitshukla.pixellauncher.ui.ChoiceDialog
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
@@ -50,7 +45,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import dev.rohitshukla.pixellauncher.R
 import dev.rohitshukla.pixellauncher.data.AppEntry
@@ -66,11 +67,7 @@ interface SettingsController {
     fun launch(app: AppEntry)
     fun toast(message: Int)
     fun changeWallpaper()
-    fun addPage()
-    fun removePage()
     fun setSearchBarEnabled(on: Boolean)
-    fun setSuggestionsEnabled(on: Boolean)
-    fun setLanguage(option: AppLanguage.Option)
 }
 
 enum class SettingsScreen { Main, Unlock, HiddenApps, SetPattern }
@@ -91,7 +88,6 @@ fun SettingsApp(
     apps: List<AppEntry>,
     hidden: Set<String>,
     settings: LauncherSettings,
-    language: AppLanguage.Option?,
     icons: IconCache,
     controller: SettingsController,
     onExit: () -> Unit,
@@ -101,7 +97,6 @@ fun SettingsApp(
             when (screen) {
                 SettingsScreen.Main -> MainScreen(
                     settings = settings,
-                    language = language,
                     controller = controller,
                     onHideApps = {
                         when (hasPattern) {
@@ -168,57 +163,53 @@ private fun SettingsRow(text: String, onClick: () -> Unit, leading: @Composable 
 }
 
 /** Yomo's settings rows, in its order, without its Premium, sharing, social and sign-in rows. */
+/** The settings rows, without Yomo's Premium, sharing, social and sign-in rows. */
 @Composable
 private fun MainScreen(
     settings: LauncherSettings,
-    language: AppLanguage.Option?,
     controller: SettingsController,
     onHideApps: () -> Unit,
     onBack: () -> Unit,
 ) {
-    var choosingLanguage by remember { mutableStateOf(false) }
     Header(stringResource(R.string.settings_name), onBack)
     Column(Modifier.verticalScroll(rememberScrollState())) {
         SettingsRow(stringResource(R.string.change_wallpaper), controller::changeWallpaper) { Icon(Icons.Outlined.Home, contentDescription = null) }
-        SettingsRow(stringResource(R.string.add_shortcuts_page), controller::addPage) { Icon(Icons.Outlined.AddCircle, contentDescription = null) }
-        SettingsRow(stringResource(R.string.remove_shortcuts_page), controller::removePage) { Icon(Icons.Outlined.Delete, contentDescription = null) }
         SettingsRow(stringResource(R.string.hide_apps), onHideApps) { Icon(Icons.Outlined.Lock, contentDescription = null) }
         SwitchRow(stringResource(R.string.enable_search_bar), settings.searchBarEnabled, controller::setSearchBarEnabled) {
             Icon(Icons.Outlined.Search, contentDescription = null)
         }
-        SwitchRow(stringResource(R.string.enable_app_suggestions), settings.suggestionsEnabled, controller::setSuggestionsEnabled) {
-            Icon(Icons.Outlined.Star, contentDescription = null)
-        }
-        SettingsRow(stringResource(R.string.change_language), { choosingLanguage = true }) { Icon(Icons.Outlined.Edit, contentDescription = null) }
-        AppVersion()
+        Footer()
     }
-    if (choosingLanguage) {
-        ChoiceDialog(
-            title = stringResource(R.string.choose_language),
-            options = AppLanguage.Option.entries,
-            selected = language,
-            label = { it.nativeName },
-            onPick = {
-                choosingLanguage = false
-                controller.setLanguage(it)
-            },
-            onDismiss = { choosingLanguage = false },
+}
+
+/** Credit line, plus the build version so a tester can confirm which one they have. */
+@Composable
+private fun Footer() {
+    val context = LocalContext.current
+    val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty() }
+    val prefix = stringResource(R.string.footer_credit_prefix)
+    val name = stringResource(R.string.footer_author)
+    // "Rohit Shukla" is a bold link (no underline, same colour), opening the author's site.
+    val credit = remember(prefix, name) {
+        buildAnnotatedString {
+            append(prefix)
+            withLink(LinkAnnotation.Url(AUTHOR_URL, TextLinkStyles(style = SpanStyle(fontWeight = FontWeight.Bold)))) {
+                append(name)
+            }
+        }
+    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp)) {
+        Text(credit, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            text = stringResource(R.string.version, version),
+            modifier = Modifier.padding(top = 2.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
-/** Which build is installed, so a tester can confirm they have the latest one. */
-@Composable
-private fun AppVersion() {
-    val context = LocalContext.current
-    val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty() }
-    Text(
-        text = stringResource(R.string.version, version),
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-}
+private const val AUTHOR_URL = "https://info.rohitshukla.net/"
 
 @Composable
 private fun SwitchRow(text: String, checked: Boolean, onChange: (Boolean) -> Unit, leading: @Composable () -> Unit) {
