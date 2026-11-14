@@ -59,10 +59,7 @@
     <string name="choose_language">भाषा चुनें</string>
     <string name="set_as_default_home">Pixel Launcher को डिफ़ॉल्ट होम ऐप बनाएं</string>
     <string name="version">संस्करण %1$s</string>
-    <string name="lock_screen_offer_title">होम वॉलपेपर बदल दिया गया</string>
-    <string name="lock_screen_offer_text">यह फ़ोन ऐप्स को लॉक स्क्रीन बदलने नहीं देता। आप फ़ोन के अपने वॉलपेपर ऐप में इसे लगाकर देख सकते हैं।</string>
-    <string name="set_on_lock_screen">लॉक स्क्रीन पर लगाएं</string>
-    <string name="not_now">अभी नहीं</string>
-    <string name="set_lock_screen_with">लॉक स्क्रीन वॉलपेपर इससे लगाएं</string>
-    <string name="no_wallpaper_app">इस फ़ोन पर कोई ऐप वॉलपेपर नहीं लगा सकता</string>
+    <string name="home_wallpaper_changed">होम वॉलपेपर बदल दिया गया</string>
+    <string name="lock_screen_blocked">इस डिवाइस पर लॉक स्क्रीन वॉलपेपर नहीं बदला जा सकता। इसके एडमिनिस्ट्रेटर ने सभी ऐप्स के लिए वॉलपेपर बदलना बंद किया है, डिवाइस के अपने वॉलपेपर ऐप्स के लिए भी।</string>
+    <string name="ok">ठीक है</string>
 </resources>

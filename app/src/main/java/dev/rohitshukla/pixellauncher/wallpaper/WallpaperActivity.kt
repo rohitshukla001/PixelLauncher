@@ -1,8 +1,6 @@
 package dev.rohitshukla.pixellauncher.wallpaper
 
 import android.app.WallpaperManager
-import android.content.ActivityNotFoundException
-import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -86,7 +84,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
-import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import dev.rohitshukla.pixellauncher.R
 import dev.rohitshukla.pixellauncher.data.AppData
@@ -107,8 +104,8 @@ class WallpaperActivity : ComponentActivity() {
 
     private var applying by mutableStateOf(false)
 
-    /** Set after Submit on a phone that blocks wallpaper changes: offers the phone's own wallpaper app for the lock screen. */
-    private var lockScreenOffer by mutableStateOf<Bitmap?>(null)
+    /** Set after Submit on a device whose policy blocks wallpaper changes: home changed, the lock screen could not. */
+    private var lockScreenBlocked by mutableStateOf(false)
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLanguage.wrap(newBase))
@@ -131,12 +128,7 @@ class WallpaperActivity : ComponentActivity() {
                         },
                         onCustom = { make -> apply(firstRun, OwnWallpaper.Custom(System.currentTimeMillis()), make) },
                     )
-                    lockScreenOffer?.let { bitmap ->
-                        LockScreenOffer(
-                            onSet = { openPhoneWallpaperApp(bitmap) },
-                            onDismiss = ::finish,
-                        )
-                    }
+                    if (lockScreenBlocked) LockScreenBlockedNotice(onDismiss = ::finish)
                 }
             }
         }
@@ -153,8 +145,8 @@ class WallpaperActivity : ComponentActivity() {
         lifecycleScope.launch {
             val settings = AppData.settings(this@WallpaperActivity)
             var error: Throwable? = null
-            // The bitmap is kept when the launcher has to draw it, for the lock screen offer below.
-            var drawnByLauncher: Bitmap? = null
+            // True when the launcher has to draw it: home changed, the lock screen did not.
+            var drawnByLauncher = false
             val done = withContext(Dispatchers.Default) {
                 val bitmap = try {
                     make()
@@ -171,7 +163,7 @@ class WallpaperActivity : ComponentActivity() {
                         File(filesDir, OwnWallpaper.FILE_NAME).outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }
                     }
                     settings.setOwnWallpaper(choice)
-                    drawnByLauncher = bitmap
+                    drawnByLauncher = true
                     true
                 } catch (e: java.io.IOException) {
                     error = e
@@ -179,8 +171,10 @@ class WallpaperActivity : ComponentActivity() {
                 }
             }
             applying = false
+            // "Successfully changed" only when Android confirmed home and lock screen; a drawn-by-launcher
+            // home gets its own, accurate notice below.
             if (done) {
-                if (!firstRun) Toast.makeText(this@WallpaperActivity, R.string.wallpaper_changed, Toast.LENGTH_SHORT).show()
+                if (!firstRun && !drawnByLauncher) Toast.makeText(this@WallpaperActivity, R.string.wallpaper_changed, Toast.LENGTH_SHORT).show()
             } else {
                 Log.w(TAG, "Changing the wallpaper failed", error)
                 Toast.makeText(this@WallpaperActivity, getString(R.string.wallpaper_not_changed) + debugDetail(error), Toast.LENGTH_LONG).show()
@@ -188,8 +182,8 @@ class WallpaperActivity : ComponentActivity() {
             // First run never traps you: it completes even when the wallpaper could not change.
             if (firstRun) settings.completeSetup()
             when {
-                // Home changed but the lock screen could not: offer the phone's own wallpaper app before closing.
-                drawnByLauncher != null -> lockScreenOffer = drawnByLauncher
+                // Home changed but the lock screen could not: say so before closing.
+                drawnByLauncher -> lockScreenBlocked = true
                 // From Settings, a failure leaves you on the screen to try again.
                 done || firstRun -> finish()
             }
@@ -208,32 +202,6 @@ class WallpaperActivity : ComponentActivity() {
         } catch (e: Exception) {
             Log.w(TAG, "The phone refused the system wallpaper; drawing it in the launcher instead", e)
             false
-        }
-    }
-
-    /**
-     * Hands the wallpaper to the phone's own apps ("Set as"), where the lock screen may still be
-     * changeable on managed phones (Yomo's FAQ points Samsung users to the same route). Whether
-     * the phone allows it there is up to its policy.
-     */
-    private fun openPhoneWallpaperApp(bitmap: Bitmap) {
-        lifecycleScope.launch {
-            val uri = withContext(Dispatchers.IO) {
-                val file = File(cacheDir, "wallpaper/lock_screen.jpg").apply { parentFile?.mkdirs() }
-                file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }
-                FileProvider.getUriForFile(this@WallpaperActivity, "$packageName.files", file)
-            }
-            val setAs = Intent(Intent.ACTION_ATTACH_DATA)
-                .setDataAndType(uri, "image/jpeg")
-                .putExtra("mimeType", "image/jpeg")
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                .apply { clipData = ClipData.newRawUri(null, uri) }
-            try {
-                startActivity(Intent.createChooser(setAs, getString(R.string.set_lock_screen_with)))
-            } catch (e: ActivityNotFoundException) {
-                Toast.makeText(this@WallpaperActivity, R.string.no_wallpaper_app, Toast.LENGTH_SHORT).show()
-            }
-            finish()
         }
     }
 
@@ -453,15 +421,18 @@ internal fun sampleSize(width: Int, height: Int, screenWidth: Int, screenHeight:
     return sample
 }
 
-/** After Submit on a phone that blocks wallpaper changes: home changed; the lock screen can only be tried in the phone's own app. */
+/**
+ * After Submit on a device whose policy blocks wallpaper changes. Home changed (drawn by the launcher),
+ * but the lock screen cannot be changed by any app there: the system's own wallpaper apps are blocked
+ * too, even when they report success. Only the device's administrator can allow it.
+ */
 @Composable
-private fun LockScreenOffer(onSet: () -> Unit, onDismiss: () -> Unit) {
+private fun LockScreenBlockedNotice(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.lock_screen_offer_title)) },
-        text = { Text(stringResource(R.string.lock_screen_offer_text)) },
-        confirmButton = { TextButton(onClick = onSet) { Text(stringResource(R.string.set_on_lock_screen)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.not_now)) } },
+        title = { Text(stringResource(R.string.home_wallpaper_changed)) },
+        text = { Text(stringResource(R.string.lock_screen_blocked)) },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.ok)) } },
     )
 }
 
