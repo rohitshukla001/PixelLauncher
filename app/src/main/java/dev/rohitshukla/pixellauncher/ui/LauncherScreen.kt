@@ -189,7 +189,7 @@ fun LauncherScreen(
 
     fun menuFor(app: AppEntry) = AppMenu(
         onAppInfo = { controller.openAppInfo(app, it) },
-        onUninstall = if (app.isSystem) null else ({ controller.uninstall(app) }),
+        onUninstall = if (app.isSystem || app.isSelf) null else ({ controller.uninstall(app) }),
     )
 
     // Back never leaves the launcher. The drawer's handler below takes precedence while it is open.

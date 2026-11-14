@@ -57,4 +57,5 @@
     <string name="enable_app_suggestions">App suggestions dikhayein</string>
     <string name="change_language">Bhasha badlein</string>
     <string name="choose_language">Bhasha chunein</string>
+    <string name="set_as_default_home">Pixel Launcher ko default home app banayein</string>
 </resources>
