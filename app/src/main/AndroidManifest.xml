@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Search results are shown inside the app (as in Yomo). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lets the long-press menu's Uninstall open Android's uninstall dialog (Yomo asks for it too). -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Change wallpaper (Yomo asks for it too). -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+
+    <!-- Package visibility (Android 11+): only the apps the launcher shows or puts in the dock. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.media.action.STILL_IMAGE_CAMERA" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SHOW_ALARMS" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
+        tools:targetApi="33"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.PixelLauncher">
+
+        <activity
+            android:name=".MainActivity"
+            android:clearTaskOnLaunch="true"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:stateNotNeeded="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Listed in the app drawer, like Yomo's own settings icon. Its own task: in the home
+             task's affinity, Android would just bring home to the front instead of opening it. -->
+        <activity
+            android:name=".settings.SettingsActivity"
+            android:exported="true"
+            android:taskAffinity="dev.rohitshukla.pixellauncher.settings"
+            android:label="@string/settings_name"
+            android:theme="@style/Theme.PixelLauncher.Settings">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Own tasks, like Settings: in the home task's affinity they would not open over home. -->
+        <activity
+            android:name=".search.SearchActivity"
+            android:exported="false"
+            android:taskAffinity="dev.rohitshukla.pixellauncher.search"
+            android:theme="@style/Theme.PixelLauncher.Settings"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".wallpaper.WallpaperActivity"
+            android:exported="false"
+            android:taskAffinity="dev.rohitshukla.pixellauncher.wallpaper"
+            android:theme="@style/Theme.PixelLauncher.Settings" />
+
+    </application>
+
+</manifest>

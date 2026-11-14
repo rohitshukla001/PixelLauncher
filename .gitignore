@@ -1,0 +1,31 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local config (SDK path, secrets)
+local.properties
+*.keystore
+*.jks
+keystore.properties
+
+# Kotlin
+.kotlin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Decompiled Yomo Launcher, used only as a feature checklist.
+# It is Potter Labs' code and must never be committed or published.
+/base/
+/jadx/
+/xapk/
+/manifest.txt
