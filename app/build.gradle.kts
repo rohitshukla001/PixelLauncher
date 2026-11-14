@@ -14,8 +14,9 @@ android {
         applicationId = "dev.rohitshukla.pixellauncher"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // Bump for every APK handed out for testing, so the tester can tell builds apart (shown in Settings).
+        versionCode = 2
+        versionName = "0.1.1"
     }
 
     // Release signing reads keystore.properties at the project root (kept out of git):

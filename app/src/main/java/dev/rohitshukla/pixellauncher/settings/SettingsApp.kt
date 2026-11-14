@@ -48,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -189,6 +190,7 @@ private fun MainScreen(
             Icon(Icons.Outlined.Star, contentDescription = null)
         }
         SettingsRow(stringResource(R.string.change_language), { choosingLanguage = true }) { Icon(Icons.Outlined.Edit, contentDescription = null) }
+        AppVersion()
     }
     if (choosingLanguage) {
         ChoiceDialog(
@@ -203,6 +205,19 @@ private fun MainScreen(
             onDismiss = { choosingLanguage = false },
         )
     }
+}
+
+/** Which build is installed, so a tester can confirm they have the latest one. */
+@Composable
+private fun AppVersion() {
+    val context = LocalContext.current
+    val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty() }
+    Text(
+        text = stringResource(R.string.version, version),
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
