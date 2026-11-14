@@ -59,7 +59,4 @@
     <string name="choose_language">Bhasha chunein</string>
     <string name="set_as_default_home">Pixel Launcher ko default home app banayein</string>
     <string name="version">Version %1$s</string>
-    <string name="home_wallpaper_changed">Home wallpaper badal diya gaya</string>
-    <string name="lock_screen_blocked">Is device par lock screen wallpaper nahi badla ja sakta. Iske administrator ne sabhi apps ke liye wallpaper badalna band kiya hai, device ke apne wallpaper apps ke liye bhi.</string>
-    <string name="ok">OK</string>
 </resources>
