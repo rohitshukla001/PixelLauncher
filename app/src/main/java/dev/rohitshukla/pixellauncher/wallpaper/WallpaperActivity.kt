@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -121,34 +122,58 @@ class WallpaperActivity : ComponentActivity() {
         }
     }
 
+    private sealed interface Outcome {
+        data object Changed : Outcome
+
+        /** The phone's policy (an admin or a user restriction) does not let apps change the wallpaper. */
+        data object Blocked : Outcome
+
+        data class Failed(val error: Throwable?) : Outcome
+    }
+
     private fun apply(firstRun: Boolean, make: () -> Bitmap?) {
         if (applying) return
         applying = true
         lifecycleScope.launch {
             val manager = WallpaperManager.getInstance(this@WallpaperActivity)
-            val done = manager.isSetWallpaperAllowed && withContext(Dispatchers.Default) {
-                try {
-                    val bitmap = make() ?: return@withContext false
-                    manager.setBitmap(bitmap, null, true, WallpaperManager.FLAG_SYSTEM)
-                    true
-                } catch (e: java.io.IOException) {
-                    false
-                } catch (e: SecurityException) {
-                    false
+            val outcome = if (!manager.isSetWallpaperAllowed) {
+                Outcome.Blocked
+            } else {
+                withContext(Dispatchers.Default) {
+                    try {
+                        val bitmap = make() ?: return@withContext Outcome.Failed(null)
+                        manager.setBitmap(bitmap, null, true, WallpaperManager.FLAG_SYSTEM)
+                        Outcome.Changed
+                    } catch (e: Exception) {
+                        // Phones differ here (IOException, SecurityException, OEM runtime errors); keep the reason.
+                        Outcome.Failed(e)
+                    }
                 }
             }
             applying = false
-            if (!done) {
-                Toast.makeText(this@WallpaperActivity, R.string.wallpaper_not_changed, Toast.LENGTH_SHORT).show()
-                return@launch
+            if (outcome is Outcome.Failed) Log.w(TAG, "Setting the wallpaper failed", outcome.error)
+
+            val message = when (outcome) {
+                Outcome.Changed -> if (firstRun) null else getString(R.string.wallpaper_changed)
+                Outcome.Blocked -> getString(R.string.wallpaper_blocked)
+                is Outcome.Failed -> getString(R.string.wallpaper_not_changed) + debugDetail(outcome.error)
             }
-            if (firstRun) {
-                AppData.settings(this@WallpaperActivity).completeSetup()
-            } else {
-                Toast.makeText(this@WallpaperActivity, R.string.wallpaper_changed, Toast.LENGTH_SHORT).show()
+            message?.let { Toast.makeText(this@WallpaperActivity, it, Toast.LENGTH_LONG).show() }
+
+            // First run never traps you: if the wallpaper can't change, setup finishes with the current one
+            // (Yomo also goes on without it on managed phones). From Settings, you stay to try another.
+            if (outcome == Outcome.Changed || firstRun) {
+                if (firstRun) AppData.settings(this@WallpaperActivity).completeSetup()
+                finish()
             }
-            finish()
         }
+    }
+
+    /** In debug builds only, the error itself, so a tester can report what went wrong. */
+    private fun debugDetail(error: Throwable?): String {
+        val debuggable = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+        if (!debuggable || error == null) return ""
+        return "\n(${error.javaClass.simpleName}: ${error.message})"
     }
 
     private fun screenSize(): Pair<Int, Int> =
@@ -167,6 +192,7 @@ class WallpaperActivity : ComponentActivity() {
     private fun screenHeight() = screenSize().second
 
     companion object {
+        private const val TAG = "PixelLauncher"
         private const val EXTRA_FIRST_RUN = "first_run"
 
         /** Its own task, so it opens over the launcher rather than inside the home task. */
