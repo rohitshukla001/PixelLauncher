@@ -17,14 +17,14 @@ class OwnWallpaperTest {
 
     @Test
     fun `choices round trip`() {
-        listOf(OwnWallpaper.BuiltIn(3), OwnWallpaper.Custom(1_700_000_000_000)).forEach {
+        listOf(OwnWallpaper.BuiltIn(3), OwnWallpaper.Photo("ocean.jpg"), OwnWallpaper.Custom(1_700_000_000_000)).forEach {
             assertEquals(it, OwnWallpaper.decode(OwnWallpaper.encode(it)))
         }
     }
 
     @Test
     fun `unreadable values mean the system wallpaper`() {
-        listOf(null, "", "builtin", "builtin:x", "custom:", "photo:1").forEach { assertNull(it, OwnWallpaper.decode(it)) }
+        listOf(null, "", "builtin", "builtin:x", "custom:", "photo:", "nope:x").forEach { assertNull(it, OwnWallpaper.decode(it)) }
     }
 
     private fun TestScope.repo() = SettingsRepository(

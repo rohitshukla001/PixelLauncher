@@ -37,6 +37,9 @@ enum class SearchEngine(val label: String) {
 sealed interface OwnWallpaper {
     data class BuiltIn(val index: Int) : OwnWallpaper
 
+    /** A bundled photo wallpaper, by its file name under the `wallpapers/` assets folder. */
+    data class Photo(val asset: String) : OwnWallpaper
+
     /** The cropped photo, saved in the app's own storage as [FILE_NAME]; [version] changes with each new photo. */
     data class Custom(val version: Long) : OwnWallpaper
 
@@ -45,14 +48,16 @@ sealed interface OwnWallpaper {
 
         fun encode(value: OwnWallpaper): String = when (value) {
             is BuiltIn -> "builtin:${value.index}"
+            is Photo -> "photo:${value.asset}"
             is Custom -> "custom:${value.version}"
         }
 
         fun decode(stored: String?): OwnWallpaper? {
-            val (kind, number) = stored?.split(':', limit = 2)?.takeIf { it.size == 2 } ?: return null
+            val (kind, value) = stored?.split(':', limit = 2)?.takeIf { it.size == 2 } ?: return null
             return when (kind) {
-                "builtin" -> number.toIntOrNull()?.let(::BuiltIn)
-                "custom" -> number.toLongOrNull()?.let(::Custom)
+                "builtin" -> value.toIntOrNull()?.let(::BuiltIn)
+                "photo" -> value.takeIf { it.isNotEmpty() }?.let(::Photo)
+                "custom" -> value.toLongOrNull()?.let(::Custom)
                 else -> null
             }
         }

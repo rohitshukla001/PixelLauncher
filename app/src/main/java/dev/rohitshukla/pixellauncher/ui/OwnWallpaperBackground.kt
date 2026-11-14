@@ -18,6 +18,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import dev.rohitshukla.pixellauncher.data.OwnWallpaper
 import dev.rohitshukla.pixellauncher.wallpaper.BuiltInWallpapers
+import dev.rohitshukla.pixellauncher.wallpaper.PhotoWallpapers
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -43,5 +44,6 @@ fun OwnWallpaperBackground(wallpaper: OwnWallpaper?) {
 
 private fun load(context: Context, wallpaper: OwnWallpaper, width: Int, height: Int): ImageBitmap? = when (wallpaper) {
     is OwnWallpaper.BuiltIn -> BuiltInWallpapers.render(wallpaper.index, width, height).asImageBitmap()
+    is OwnWallpaper.Photo -> PhotoWallpapers.load(context, wallpaper.asset, width, height)?.asImageBitmap()
     is OwnWallpaper.Custom -> BitmapFactory.decodeFile(File(context.filesDir, OwnWallpaper.FILE_NAME).path)?.asImageBitmap()
 }

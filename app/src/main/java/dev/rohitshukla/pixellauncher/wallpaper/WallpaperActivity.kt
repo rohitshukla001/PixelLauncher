@@ -110,6 +110,7 @@ class WallpaperActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val firstRun = intent.getBooleanExtra(EXTRA_FIRST_RUN, false)
+        val photoNames = PhotoWallpapers.names(this)
         setContent {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
                 Surface(Modifier.fillMaxSize()) {
@@ -118,6 +119,10 @@ class WallpaperActivity : ComponentActivity() {
                         applying = applying,
                         screenWidth = screenWidth(),
                         screenHeight = screenHeight(),
+                        photoNames = photoNames,
+                        onPhoto = { name ->
+                            apply(firstRun, OwnWallpaper.Photo(name)) { PhotoWallpapers.load(this, name, screenWidth(), screenHeight()) }
+                        },
                         onBuiltIn = { index ->
                             apply(firstRun, OwnWallpaper.BuiltIn(index)) { BuiltInWallpapers.render(index, screenWidth(), screenHeight()) }
                         },
@@ -228,10 +233,13 @@ private fun WallpaperScreen(
     applying: Boolean,
     screenWidth: Int,
     screenHeight: Int,
+    photoNames: List<String>,
+    onPhoto: (String) -> Unit,
     onBuiltIn: (Int) -> Unit,
     onCustom: (make: () -> Bitmap) -> Unit,
 ) {
-    var selected by rememberSaveable { mutableStateOf<Int?>(null) }
+    // A selection is "photo:<name>" or "gen:<index>", kept as a string so it survives recreation.
+    var selected by rememberSaveable { mutableStateOf<String?>(null) }
     var cropping by rememberSaveable { mutableStateOf<Uri?>(null) }
     // The system photo picker: no storage permission needed.
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> cropping = uri }
@@ -275,15 +283,26 @@ private fun WallpaperScreen(
                     }
                 }
             }
+            items(photoNames) { name ->
+                PhotoPreview(name, chosen = selected == "photo:$name", onClick = { selected = "photo:$name" })
+            }
             items((0 until BuiltInWallpapers.COUNT).toList()) { index ->
-                Preview(index, chosen = selected == index, onClick = { selected = index })
+                Preview(index, chosen = selected == "gen:$index", onClick = { selected = "gen:$index" })
             }
         }
         Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
             if (applying) {
                 CircularProgressIndicator()
             } else {
-                Button(onClick = { selected?.let(onBuiltIn) }, enabled = selected != null, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = {
+                        val choice = selected ?: return@Button
+                        if (choice.startsWith("photo:")) onPhoto(choice.removePrefix("photo:"))
+                        else onBuiltIn(choice.removePrefix("gen:").toInt())
+                    },
+                    enabled = selected != null,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Text(stringResource(if (firstRun) R.string.continue_label else R.string.submit))
                 }
             }
@@ -419,5 +438,26 @@ private fun Preview(index: Int, chosen: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick),
     ) {
         image?.let { Image(it, contentDescription = stringResource(R.string.wallpaper_number, index + 1), contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+    }
+}
+
+/** A bundled photo wallpaper preview, loaded from assets at preview size. */
+@Composable
+private fun PhotoPreview(name: String, chosen: Boolean, onClick: () -> Unit) {
+    val context = LocalContext.current
+    var image by remember(name) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(name) {
+        image = withContext(Dispatchers.Default) { PhotoWallpapers.load(context, name, 270, 585)?.asImageBitmap() }
+    }
+    val shape = RoundedCornerShape(16.dp)
+    Box(
+        Modifier
+            .aspectRatio(270f / 585f)
+            .scale(if (chosen) 1.05f else 1f)
+            .clip(shape)
+            .then(if (chosen) Modifier.border(BorderStroke(3.dp, MaterialTheme.colorScheme.primary), shape) else Modifier)
+            .clickable(onClick = onClick),
+    ) {
+        image?.let { Image(it, contentDescription = name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
     }
 }
