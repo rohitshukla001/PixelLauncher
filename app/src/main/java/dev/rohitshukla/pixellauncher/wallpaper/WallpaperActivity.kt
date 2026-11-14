@@ -6,6 +6,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
+import android.graphics.Matrix
+import androidx.exifinterface.media.ExifInterface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -145,25 +147,29 @@ class WallpaperActivity : ComponentActivity() {
             val settings = AppData.settings(this@WallpaperActivity)
             var error: Throwable? = null
             val done = withContext(Dispatchers.Default) {
+                // Throwable, not Exception: making a full-screen bitmap can hit OutOfMemoryError.
                 val bitmap = try {
                     make()
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     error = e
                     null
                 } ?: return@withContext false
-                if (setSystemWallpaper(bitmap)) {
-                    settings.setOwnWallpaper(null)
-                    return@withContext true
-                }
                 try {
+                    if (setSystemWallpaper(bitmap)) {
+                        settings.setOwnWallpaper(null)
+                        return@withContext true
+                    }
                     if (choice is OwnWallpaper.Custom) {
                         File(filesDir, OwnWallpaper.FILE_NAME).outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }
                     }
                     settings.setOwnWallpaper(choice)
                     true
-                } catch (e: java.io.IOException) {
+                } catch (e: Throwable) {
                     error = e
                     false
+                } finally {
+                    // The bitmap has been written (to the system or to disk); free it now.
+                    bitmap.recycle()
                 }
             }
             applying = false
@@ -383,7 +389,7 @@ private fun CropScreen(
                     val area = CropMath.sourceRect(v, frame, imageSize)
                     onCropped {
                         val cut = Bitmap.createBitmap(source, area.left, area.top, area.width, area.height)
-                        Bitmap.createScaledBitmap(cut, screenWidth, screenHeight, true)
+                        Bitmap.createScaledBitmap(cut, screenWidth, screenHeight, true).also { if (it != cut) cut.recycle() }
                     }
                 },
                 enabled = !applying && view != null,
@@ -395,7 +401,7 @@ private fun CropScreen(
 
 /**
  * Decodes the picked photo, scaled down to no smaller than the screen and upright (camera photos
- * store their rotation separately; Android 9+ applies it while decoding).
+ * store their rotation separately; Android 9+ applies it while decoding, older versions via EXIF).
  */
 private fun loadPhoto(context: Context, uri: Uri, screenWidth: Int, screenHeight: Int): Bitmap? = try {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -408,12 +414,33 @@ private fun loadPhoto(context: Context, uri: Uri, screenWidth: Int, screenHeight
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
         val options = BitmapFactory.Options().apply { inSampleSize = sampleSize(bounds.outWidth, bounds.outHeight, screenWidth, screenHeight) }
-        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+        val decoded = context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+        decoded?.let { applyExifRotation(context, uri, it) }
     }
 } catch (e: java.io.IOException) {
     null
 } catch (e: SecurityException) {
     null
+}
+
+/** Pre-Android-9: camera photos store rotation in EXIF; apply it so the wallpaper is upright. */
+private fun applyExifRotation(context: Context, uri: Uri, bitmap: Bitmap): Bitmap {
+    val orientation = try {
+        context.contentResolver.openInputStream(uri)?.use {
+            ExifInterface(it).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        } ?: ExifInterface.ORIENTATION_NORMAL
+    } catch (e: java.io.IOException) {
+        ExifInterface.ORIENTATION_NORMAL
+    }
+    val degrees = when (orientation) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+        ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+        ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+        else -> return bitmap
+    }
+    val matrix = Matrix().apply { postRotate(degrees) }
+    return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+        .also { if (it != bitmap) bitmap.recycle() }
 }
 
 /** The largest power-of-two shrink that keeps both sides at least the screen's. */

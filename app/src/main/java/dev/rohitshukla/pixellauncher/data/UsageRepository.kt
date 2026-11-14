@@ -27,6 +27,15 @@ class UsageRepository(private val store: DataStore<Preferences>) {
         store.edit { it[key] = (it[key] ?: 0) + 1 }
     }
 
+    /** Drops counts for apps no longer installed, so the store does not grow without bound. */
+    suspend fun prune(installedKeys: Set<String>) {
+        store.edit { p ->
+            p.asMap().keys
+                .filter { it.name.startsWith(PREFIX) && it.name.removePrefix(PREFIX) !in installedKeys }
+                .forEach { p.remove(intPreferencesKey(it.name)) }
+        }
+    }
+
     private companion object {
         const val PREFIX = "launches:"
     }

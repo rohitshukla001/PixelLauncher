@@ -4,8 +4,11 @@ import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -164,33 +167,57 @@ private fun SearchScreen(engine: SearchEngine, initialQuery: String?, onExit: ()
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun ResultsView(url: String, onLoading: (Boolean) -> Unit, onCreated: (WebView) -> Unit) {
+    // The registrable domain of the search engine, e.g. "google.com". Only pages on it stay in the app.
+    val allowedDomain = remember(url) { Uri.parse(url).host?.split('.')?.takeLast(2)?.joinToString(".").orEmpty() }
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { context ->
+            // Incognito: no cookies, no cache. Search pages need JavaScript; nothing in the app is exposed to them.
+            CookieManager.getInstance().apply {
+                removeAllCookies(null)
+                setAcceptCookie(false)
+            }
             WebView(context).apply {
-                // Search pages need JavaScript; nothing in the app is exposed to them.
+                CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
                 settings.javaScriptEnabled = true
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
-                webViewClient = ResultsClient(context, onLoading)
+                settings.cacheMode = WebSettings.LOAD_NO_CACHE
+                webViewClient = ResultsClient(context, allowedDomain, onLoading)
                 onCreated(this)
             }
         },
-        update = { view -> if (view.url != url && view.originalUrl != url) view.loadUrl(url) },
-        onRelease = { it.destroy() },
+        // Load each distinct query once; in-page navigation and redirects are left alone.
+        update = { view -> if (view.tag != url) { view.tag = url; view.loadUrl(url) } },
+        onRelease = { it.clearHistory(); it.clearCache(true); it.destroy() },
     )
 }
 
-/** Keeps the results page and its own redirects in the app; anything the user taps goes to the browser. */
-private class ResultsClient(private val context: Context, private val onLoading: (Boolean) -> Unit) : WebViewClient() {
+/**
+ * Keeps only pages on the search engine's own domain in the app; every other main-frame navigation
+ * (a tapped link, or a cross-site JavaScript/meta redirect that could be a phishing page) opens in
+ * the real browser, which has an address bar. Only http/https are launched.
+ */
+private class ResultsClient(
+    private val context: Context,
+    private val allowedDomain: String,
+    private val onLoading: (Boolean) -> Unit,
+) : WebViewClient() {
 
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-        if (!request.isForMainFrame || !request.hasGesture()) return false
-        try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, request.url).addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        } catch (e: ActivityNotFoundException) {
-            Toast.makeText(context, R.string.browser_not_found, Toast.LENGTH_SHORT).show()
+        // Sub-frame (iframe) navigations load normally; only main-frame navigation is gated.
+        if (!request.isForMainFrame) return false
+        val url = request.url
+        val sameSite = url.host?.let { it == allowedDomain || it.endsWith(".$allowedDomain") } == true
+        if (sameSite) return false
+        if (url.scheme == "http" || url.scheme == "https") {
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, url).addCategory(Intent.CATEGORY_BROWSABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (e: ActivityNotFoundException) {
+                Toast.makeText(context, R.string.browser_not_found, Toast.LENGTH_SHORT).show()
+            }
         }
+        // Non-http schemes (intent://, market:// …) are dropped: never load them in the chromeless view.
         return true
     }
 

@@ -45,5 +45,16 @@ fun OwnWallpaperBackground(wallpaper: OwnWallpaper?) {
 private fun load(context: Context, wallpaper: OwnWallpaper, width: Int, height: Int): ImageBitmap? = when (wallpaper) {
     is OwnWallpaper.BuiltIn -> BuiltInWallpapers.render(wallpaper.index, width, height).asImageBitmap()
     is OwnWallpaper.Photo -> PhotoWallpapers.load(context, wallpaper.asset, width, height)?.asImageBitmap()
-    is OwnWallpaper.Custom -> BitmapFactory.decodeFile(File(context.filesDir, OwnWallpaper.FILE_NAME).path)?.asImageBitmap()
+    is OwnWallpaper.Custom -> decodeDownsampled(File(context.filesDir, OwnWallpaper.FILE_NAME).path, width, height)?.asImageBitmap()
+}
+
+/** Decodes a file downsampled to about [width] x [height], so a camera-size photo is not held full-size. */
+private fun decodeDownsampled(path: String, width: Int, height: Int): android.graphics.Bitmap? {
+    if (width <= 0 || height <= 0) return null
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (bounds.outWidth / (sample * 2) >= width && bounds.outHeight / (sample * 2) >= height) sample *= 2
+    return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
 }

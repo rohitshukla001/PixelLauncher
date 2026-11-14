@@ -17,6 +17,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
@@ -86,6 +87,10 @@ class MainActivity : ComponentActivity(), LauncherController {
         }
         setContent {
             val apps by appRepo.state.collectAsState()
+            // Once the app list loads, drop launch counts for apps that are no longer installed.
+            LaunchedEffect(apps.loaded, apps.apps) {
+                if (apps.loaded) usageRepo.prune(apps.apps.mapTo(HashSet()) { it.key })
+            }
             // Null until loaded: the grid depends on the search bar setting, so home waits for it.
             val settings by settingsRepo.settings.collectAsState<LauncherSettings, LauncherSettings?>(initial = null)
             val layout by homeRepo.layout.collectAsState(initial = HomeLayout())

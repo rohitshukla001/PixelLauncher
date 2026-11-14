@@ -52,7 +52,7 @@ class PatternSetup(private var first: Pattern? = null) {
 object PatternHash {
 
     private const val VERSION = "v1"
-    private const val ITERATIONS = 20_000
+    private const val ITERATIONS = 600_000
     private const val KEY_BITS = 256
     private const val SALT_BYTES = 16
 

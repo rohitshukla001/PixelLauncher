@@ -30,7 +30,12 @@ object AppLanguage {
         } else {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)
         }
-        return Option.entries.firstOrNull { it.tag.equals(tag, ignoreCase = true) }
+        // Match by language + script, not the raw tag, so a canonicalised tag (e.g. hi-Latn-IN) still maps.
+        val locale = tag?.takeIf { it.isNotEmpty() }?.let { java.util.Locale.forLanguageTag(it) } ?: return null
+        return Option.entries.firstOrNull {
+            val want = java.util.Locale.forLanguageTag(it.tag)
+            want.language == locale.language && want.script == locale.script
+        }
     }
 
     fun set(activity: Activity, option: Option) {

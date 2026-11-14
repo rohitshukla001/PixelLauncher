@@ -57,7 +57,8 @@ object PhotoWallpapers {
         val x = (scaledW - width) / 2
         val y = (scaledH - height) / 2
         val out = Bitmap.createBitmap(scaled, x, y, width, height)
-        if (scaled != src && scaled != out) scaled.recycle()
+        if (scaled != out) scaled.recycle()
+        if (src != scaled && src != out) src.recycle()
         return out
     }
 }

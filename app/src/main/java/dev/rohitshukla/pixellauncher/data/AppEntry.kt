@@ -14,8 +14,12 @@ data class AppEntry(
     /** Which profile (personal or work) the app is in: Android's serial number for that user. */
     val profile: Long = 0,
 ) {
-    /** Stable id, stored in the home layout. Same format as [ComponentName.flattenToString]. */
-    val key: String get() = "$packageName/$className"
+    /**
+     * Stable id, stored in the home layout, usage counts and the icon cache. The personal profile
+     * (serial 0) keeps the plain `package/class` form so existing saved layouts still match; other
+     * profiles append their serial, so a work copy never collides with the personal one.
+     */
+    val key: String get() = if (profile == 0L) "$packageName/$className" else "$packageName/$className@$profile"
 
     val component: ComponentName get() = ComponentName(packageName, className)
 }

@@ -67,6 +67,7 @@ import dev.rohitshukla.pixellauncher.data.Suggestions
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Everything the screens ask the launcher to do. MainActivity implements it. */
 interface LauncherController {
@@ -321,8 +322,9 @@ private suspend fun flipPage(
             Flip.Moved
         }
         target == pagerState.pageCount && canAddPage && controller.addPage() -> {
-            snapshotFlow { pagerState.pageCount }.first { it > target }
-            pagerState.animateScrollToPage(target)
+            // Wait for the new page to reach the pager, but don't block the edge loop forever if it lags.
+            withTimeoutOrNull(NEW_PAGE_TIMEOUT_MS) { snapshotFlow { pagerState.pageCount }.first { it > target } }
+            if (pagerState.pageCount > target) pagerState.animateScrollToPage(target)
             Flip.Added
         }
         else -> Flip.None
@@ -375,4 +377,5 @@ private fun DragShadow(drag: DragSession, icons: IconCache) {
 private val OPEN_SWIPE = 64.dp
 private val PAGE_EDGE = 32.dp
 private const val EDGE_HOLD_MS = 500L
+private const val NEW_PAGE_TIMEOUT_MS = 1000L
 private const val EDGE_POLL_MS = 50L

@@ -78,8 +78,13 @@ class AppRepository(context: Context, private val icons: IconCache) {
                         }
                     }
                     // The main icon is the one named like the app, else the one Android opens for it.
+                    // Launch-intent lookups are memoised so each package is queried at most once per refresh.
                     .let { all ->
-                        onePerPackage(all) { e -> e.label == appLabels[e.packageName] || e.className == mainActivityClass(e.packageName) }
+                        val mainClasses = HashMap<String, String?>()
+                        onePerPackage(all) { e ->
+                            e.label == appLabels[e.packageName] ||
+                                e.className == mainClasses.getOrPut(e.packageName) { mainActivityClass(e.packageName) }
+                        }
                     }
                     .sortedWith { a, b -> collator.compare(a.label, b.label) }
                 val dock = DockApps.pick(DockApps.defaultPackages(appContext.packageManager), apps)

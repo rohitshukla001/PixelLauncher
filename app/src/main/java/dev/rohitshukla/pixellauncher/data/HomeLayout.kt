@@ -31,7 +31,8 @@ data class GridSize(val columns: Int, val rows: Int, val headerRows: Int = 0) {
             return GridSize(
                 columns = max(1, (widthDp / MIN_CELL_WIDTH_DP).toInt()),
                 rows = rows,
-                headerRows = kotlin.math.ceil(header / cellHeight).toInt().coerceIn(1, rows),
+                // Leave at least one app row on page 1: never let the header take every row.
+                headerRows = kotlin.math.ceil(header / cellHeight).toInt().coerceIn(1, (rows - 1).coerceAtLeast(1)),
             )
         }
     }

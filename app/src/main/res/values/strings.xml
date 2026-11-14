@@ -50,4 +50,5 @@
     <string name="set_as_default_home">Set Pixel Launcher as default home app</string>
     <string name="footer_credit_prefix" translatable="false">"Design and Developed by "</string>
     <string name="footer_author" translatable="false">Rohit Shukla</string>
+    <string name="too_many_attempts">Too many attempts. Try again in a moment.</string>
 </resources>

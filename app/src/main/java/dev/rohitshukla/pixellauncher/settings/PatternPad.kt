@@ -46,9 +46,19 @@ fun PatternPad(onComplete: (Pattern) -> Unit, error: Boolean, modifier: Modifier
         modifier
             .aspectRatio(1f)
             .pointerInput(Unit) {
+                fun add(dot: Int) {
+                    if (dot in selected) return
+                    // As standard Android patterns do: a straight line over an unselected dot selects it too.
+                    val last = selected.lastOrNull()
+                    if (last != null) {
+                        val mid = midpointDot(last, dot)
+                        if (mid != null && mid !in selected) selected += mid
+                    }
+                    selected += dot
+                }
                 fun hit(point: Offset) {
                     val dot = dotAt(point, Size(size.width.toFloat(), size.height.toFloat())) ?: return
-                    if (dot !in selected) selected += dot
+                    add(dot)
                 }
                 detectDragGestures(
                     onDragStart = { start ->
@@ -91,6 +101,20 @@ fun PatternPad(onComplete: (Pattern) -> Unit, error: Boolean, modifier: Modifier
             drawCircle(if (on) lineColor else dotColor, radius = if (on) 12.dp.toPx() else 6.dp.toPx(), center = center(dot))
         }
     }
+}
+
+/**
+ * The dot exactly between [a] and [b] on the 3x3 grid when the line crosses one (e.g. 0 to 2 crosses 1,
+ * 0 to 8 crosses 4), else null.
+ */
+internal fun midpointDot(a: Int, b: Int): Int? {
+    val ra = a / 3
+    val ca = a % 3
+    val rb = b / 3
+    val cb = b % 3
+    if ((ra + rb) % 2 != 0 || (ca + cb) % 2 != 0) return null
+    val mid = (ra + rb) / 2 * 3 + (ca + cb) / 2
+    return if (mid != a && mid != b) mid else null
 }
 
 /** The dot whose touch area contains [point], or null between dots. */

@@ -15,8 +15,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // Bump for every APK handed out for testing, so the tester can tell builds apart (shown in Settings).
-        versionCode = 12
-        versionName = "0.2.1"
+        versionCode = 13
+        versionName = "0.2.2"
     }
 
     // Release signing reads keystore.properties at the project root (kept out of git):
@@ -72,6 +72,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.core)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.exifinterface)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 }

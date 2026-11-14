@@ -19,13 +19,13 @@ class HomeRepository(private val store: DataStore<Preferences>) {
 
     val layout: Flow<HomeLayout> = store.data.map(::read).distinctUntilChanged()
 
-    /** False when the cell is taken. */
+    /** False when the cell is taken or off-grid. */
     suspend fun place(key: String, cell: Cell, installed: Set<String>?): Boolean =
-        update(installed) { it.place(key, cell) }
+        update(installed, validateCell = cell) { it.place(key, cell) }
 
-    /** False when the target cell is taken. */
+    /** False when the target cell is taken or off-grid. */
     suspend fun move(from: Cell, to: Cell, installed: Set<String>?): Boolean =
-        update(installed) { it.move(from, to) }
+        update(installed, validateCell = to) { it.move(from, to) }
 
     suspend fun remove(cell: Cell) {
         update(installed = null) { it.remove(cell) }
@@ -59,10 +59,13 @@ class HomeRepository(private val store: DataStore<Preferences>) {
         return result
     }
 
-    /** Also remembers [grid], so Settings can remove pages without the home screen open. */
+    /** Also remembers [grid], so Settings can remove pages without the home screen open. One transaction. */
     suspend fun fitTo(grid: GridSize, installed: Set<String>?) {
-        update(installed) { it.fitTo(grid) }
         store.edit { p ->
+            val stored = read(p)
+            val ready = installed?.takeIf { it.isNotEmpty() }
+            val next = (ready?.let(stored::withoutMissing) ?: stored).fitTo(grid)
+            if (next != stored) write(p, next)
             p[GRID_COLUMNS] = grid.columns
             p[GRID_ROWS] = grid.rows
             p[GRID_HEADER] = grid.headerRows
@@ -86,11 +89,18 @@ class HomeRepository(private val store: DataStore<Preferences>) {
         }
     }
 
-    private suspend fun update(installed: Set<String>?, change: (HomeLayout) -> HomeLayout?): Boolean {
+    private suspend fun update(installed: Set<String>?, validateCell: Cell? = null, change: (HomeLayout) -> HomeLayout?): Boolean {
         var done = false
         store.edit { p ->
+            // Reject a cell outside the grid last measured by home (header rows, off-grid).
+            if (validateCell != null) {
+                val grid = readGrid(p)
+                if (grid != null && !grid.contains(validateCell)) return@edit
+            }
             val stored = read(p)
-            val current = installed?.let(stored::withoutMissing) ?: stored
+            // An empty set means the app list is not ready; treat it like null so nothing is dropped.
+            val ready = installed?.takeIf { it.isNotEmpty() }
+            val current = ready?.let(stored::withoutMissing) ?: stored
             val next = change(current) ?: return@edit
             done = true
             if (next != stored) write(p, next)

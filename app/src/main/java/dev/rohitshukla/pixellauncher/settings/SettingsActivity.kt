@@ -71,6 +71,12 @@ class SettingsActivity : ComponentActivity(), SettingsController {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        // Relock the unlocked list as soon as Settings stops being interactive (an overlay may skip onStop).
+        if (screen == SettingsScreen.HiddenApps) screen = SettingsScreen.Main
+    }
+
     override fun onStop() {
         super.onStop()
         screen = SettingsScreen.Main

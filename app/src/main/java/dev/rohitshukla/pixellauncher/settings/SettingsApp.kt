@@ -1,5 +1,6 @@
 package dev.rohitshukla.pixellauncher.settings
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -37,6 +38,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,6 +60,7 @@ import dev.rohitshukla.pixellauncher.data.AppEntry
 import dev.rohitshukla.pixellauncher.data.IconCache
 import dev.rohitshukla.pixellauncher.data.Pattern
 import dev.rohitshukla.pixellauncher.data.PatternSetup
+import kotlinx.coroutines.delay
 
 /** Everything the settings screens ask for. SettingsActivity implements it. */
 interface SettingsController {
@@ -73,6 +77,9 @@ enum class SettingsScreen { Main, Unlock, HiddenApps, SetPattern }
 
 /** A pattern attempt. Not a data class, so the same pattern drawn twice still counts as a new attempt. */
 private class Attempt(val pattern: Pattern)
+
+private const val ATTEMPTS_BEFORE_LOCKOUT = 5
+private const val LOCKOUT_MILLIS = 30_000L
 
 /**
  * Settings. For now only Hide Apps, which follows Yomo: set a privacy pattern the first time,
@@ -228,18 +235,39 @@ private fun SwitchRow(text: String, checked: Boolean, onChange: (Boolean) -> Uni
 private fun UnlockScreen(controller: SettingsController, onUnlocked: () -> Unit, onBack: () -> Unit) {
     var wrong by remember { mutableStateOf(false) }
     var attempt by remember { mutableStateOf<Attempt?>(null) }
+    var failures by remember { mutableIntStateOf(0) }
+    var lockedUntil by remember { mutableLongStateOf(0L) }
+    var locked by remember { mutableStateOf(false) }
 
     LaunchedEffect(attempt) {
         val pattern = attempt?.pattern ?: return@LaunchedEffect
-        if (controller.checkPattern(pattern)) onUnlocked() else wrong = true
+        if (controller.checkPattern(pattern)) {
+            onUnlocked()
+        } else {
+            wrong = true
+            failures++
+            // After a few wrong tries, lock input for a growing spell, so the pattern can't be brute-forced by hand.
+            if (failures >= ATTEMPTS_BEFORE_LOCKOUT) {
+                lockedUntil = SystemClock.elapsedRealtime() + LOCKOUT_MILLIS * (failures - ATTEMPTS_BEFORE_LOCKOUT + 1)
+            }
+        }
+    }
+
+    LaunchedEffect(lockedUntil) {
+        val wait = lockedUntil - SystemClock.elapsedRealtime()
+        if (wait <= 0) return@LaunchedEffect
+        locked = true
+        delay(wait)
+        locked = false
     }
 
     Header(stringResource(R.string.unlock_hidden_apps), onBack)
     PatternScreenBody(
         title = stringResource(R.string.enter_privacy_password),
-        message = null,
-        error = wrong,
+        message = if (locked) stringResource(R.string.too_many_attempts) else null,
+        error = wrong || locked,
         onPattern = {
+            if (locked) return@PatternScreenBody
             wrong = false
             attempt = Attempt(it)
         },

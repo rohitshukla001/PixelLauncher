@@ -74,9 +74,10 @@ class GridHeaderTest {
     fun `the search bar can take another row`() {
         // Rows of 100 dp: the clock already needs 2, and the 56 dp search bar fits in them.
         assertEquals(2, GridSize.fit(411f, 600f, searchBar = true).headerRows)
-        // Rows of 130 dp: the clock fits in 1; with the search bar it needs 2.
+        // A 2-row screen: the header is capped at 1 row so at least one app row always remains,
+        // even with the search bar on.
         assertEquals(1, GridSize.fit(411f, 260f).headerRows)
-        assertEquals(2, GridSize.fit(411f, 260f, searchBar = true).headerRows)
+        assertEquals(1, GridSize.fit(411f, 260f, searchBar = true).headerRows)
     }
 
     @Test

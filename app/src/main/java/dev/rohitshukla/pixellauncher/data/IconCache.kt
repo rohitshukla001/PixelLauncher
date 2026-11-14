@@ -19,7 +19,10 @@ class IconCache(context: Context) {
     private val userManager = context.getSystemService(UserManager::class.java)
     private val density = context.resources.displayMetrics.densityDpi
     private val sizePx = (ICON_SIZE_DP * context.resources.displayMetrics.density).toInt()
-    private val cache = LruCache<String, ImageBitmap>(MAX_ICONS)
+    // Bounded by memory, not entry count: an eighth of the heap, measured by each bitmap's bytes.
+    private val cache = object : LruCache<String, ImageBitmap>((Runtime.getRuntime().maxMemory() / 8).toInt()) {
+        override fun sizeOf(key: String, value: ImageBitmap): Int = sizePx * sizePx * 4
+    }
 
     suspend fun icon(app: AppEntry): ImageBitmap? = cache[app.key] ?: withContext(Dispatchers.IO) {
         val user = userManager.getUserForSerialNumber(app.profile) ?: Process.myUserHandle()
@@ -35,6 +38,5 @@ class IconCache(context: Context) {
 
     companion object {
         const val ICON_SIZE_DP = 56
-        private const val MAX_ICONS = 300
     }
 }
