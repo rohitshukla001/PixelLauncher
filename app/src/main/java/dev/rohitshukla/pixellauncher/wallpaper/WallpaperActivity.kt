@@ -94,8 +94,9 @@ import kotlinx.coroutines.withContext
 /**
  * Yomo's wallpaper screens. First run: "Choose wallpaper" from the built-in ones, then Continue.
  * From Settings: the same choices plus "Set custom wallpaper" (pick a photo, crop it), then Submit.
- * Only the home screen wallpaper changes; the lock screen keeps its own (Yomo's FAQ explains why).
- * Phones that block wallpaper changes still get it: the launcher draws it behind home.
+ * Submit sets both the home screen and the lock screen wallpaper (Yomo sets home only). Phones that
+ * block wallpaper changes still get it on home, drawn by the launcher; their lock screen cannot be
+ * changed by any app (Yomo's FAQ says the same).
  */
 class WallpaperActivity : ComponentActivity() {
 
@@ -128,9 +129,9 @@ class WallpaperActivity : ComponentActivity() {
     }
 
     /**
-     * As Yomo does: set the system wallpaper when the phone allows it. When it doesn't (an admin or a
+     * Set the home and lock screen wallpaper when the phone allows it. When it doesn't (an admin or a
      * restriction blocks it, or the phone refuses), keep the choice and draw it behind home instead,
-     * so it still looks changed. The lock screen and Recents keep the system wallpaper either way.
+     * as Yomo does, so home still looks changed; the lock screen then stays as it is.
      */
     private fun apply(firstRun: Boolean, choice: OwnWallpaper, make: () -> Bitmap?) {
         if (applying) return
@@ -175,12 +176,15 @@ class WallpaperActivity : ComponentActivity() {
         }
     }
 
-    /** False when the phone does not allow it or refuses (Yomo treats a zero id as refused too). */
+    /**
+     * Home and lock screen together, in one write. False when the phone does not allow it or refuses
+     * (Yomo treats a zero id as refused too).
+     */
     private fun setSystemWallpaper(bitmap: Bitmap): Boolean {
         val manager = WallpaperManager.getInstance(this)
         if (!manager.isSetWallpaperAllowed) return false
         return try {
-            manager.setBitmap(bitmap, null, true, WallpaperManager.FLAG_SYSTEM) != 0
+            manager.setBitmap(bitmap, null, true, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK) != 0
         } catch (e: Exception) {
             Log.w(TAG, "The phone refused the system wallpaper; drawing it in the launcher instead", e)
             false
