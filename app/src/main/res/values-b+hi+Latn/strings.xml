@@ -48,5 +48,4 @@
     <string name="wallpaper_not_changed">Wallpaper badal nahi paaya</string>
     <string name="enable_search_bar">Search bar dikhayein</string>
     <string name="set_as_default_home">Pixel Launcher ko default home app banayein</string>
-    <string name="version">Version %1$s</string>
 </resources>

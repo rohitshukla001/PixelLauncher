@@ -48,7 +48,6 @@
     <string name="wallpaper_not_changed">Couldn\'t change the wallpaper</string>
     <string name="enable_search_bar">Enable search bar</string>
     <string name="set_as_default_home">Set Pixel Launcher as default home app</string>
-    <string name="version">Version %1$s</string>
     <string name="footer_credit_prefix" translatable="false">"Design and Developed by "</string>
     <string name="footer_author" translatable="false">Rohit Shukla</string>
 </resources>

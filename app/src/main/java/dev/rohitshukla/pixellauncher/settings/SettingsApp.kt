@@ -43,7 +43,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -171,22 +170,22 @@ private fun MainScreen(
     onHideApps: () -> Unit,
     onBack: () -> Unit,
 ) {
-    Header(stringResource(R.string.settings_name), onBack)
-    Column(Modifier.verticalScroll(rememberScrollState())) {
-        SettingsRow(stringResource(R.string.change_wallpaper), controller::changeWallpaper) { Icon(Icons.Outlined.Home, contentDescription = null) }
-        SettingsRow(stringResource(R.string.hide_apps), onHideApps) { Icon(Icons.Outlined.Lock, contentDescription = null) }
-        SwitchRow(stringResource(R.string.enable_search_bar), settings.searchBarEnabled, controller::setSearchBarEnabled) {
-            Icon(Icons.Outlined.Search, contentDescription = null)
+    Column(Modifier.fillMaxSize()) {
+        Header(stringResource(R.string.settings_name), onBack)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            SettingsRow(stringResource(R.string.change_wallpaper), controller::changeWallpaper) { Icon(Icons.Outlined.Home, contentDescription = null) }
+            SettingsRow(stringResource(R.string.hide_apps), onHideApps) { Icon(Icons.Outlined.Lock, contentDescription = null) }
+            SwitchRow(stringResource(R.string.enable_search_bar), settings.searchBarEnabled, controller::setSearchBarEnabled) {
+                Icon(Icons.Outlined.Search, contentDescription = null)
+            }
         }
         Footer()
     }
 }
 
-/** Credit line, plus the build version so a tester can confirm which one they have. */
+/** Centred credit line pinned to the bottom. */
 @Composable
 private fun Footer() {
-    val context = LocalContext.current
-    val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName.orEmpty() }
     val prefix = stringResource(R.string.footer_credit_prefix)
     val name = stringResource(R.string.footer_author)
     // "Rohit Shukla" is a bold link (no underline, same colour), opening the author's site.
@@ -198,15 +197,13 @@ private fun Footer() {
             }
         }
     }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp)) {
-        Text(credit, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(
-            text = stringResource(R.string.version, version),
-            modifier = Modifier.padding(top = 2.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    Text(
+        text = credit,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+    )
 }
 
 private const val AUTHOR_URL = "https://info.rohitshukla.net/"
