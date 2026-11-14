@@ -7,18 +7,21 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.Shader
+import android.graphics.SweepGradient
 import kotlin.math.PI
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * Eight original wallpapers, drawn in code at any size: no image files, so nothing to license.
- * The same drawing makes the small previews and the full-screen wallpaper.
+ * Original wallpapers, drawn in code at any size: no image files, so nothing to license. The same
+ * drawing makes the small previews and the full-screen wallpaper. A mix of trending styles:
+ * landscapes, gradient meshes, minimal, geometric, dark.
  */
 object BuiltInWallpapers {
 
-    const val COUNT = 8
+    const val COUNT = 16
 
     fun render(index: Int, width: Int, height: Int): Bitmap {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -33,7 +36,15 @@ object BuiltInWallpapers {
             4 -> dunes(canvas, w, h)
             5 -> night(canvas, w, h)
             6 -> bloom(canvas, w, h)
-            else -> facets(canvas, w, h)
+            7 -> facets(canvas, w, h)
+            8 -> sunset(canvas, w, h)
+            9 -> mesh(canvas, w, h)
+            10 -> amoled(canvas, w, h)
+            11 -> peaks(canvas, w, h)
+            12 -> lowPoly(canvas, w, h)
+            13 -> rings(canvas, w, h)
+            14 -> nebula(canvas, w, h)
+            else -> pastel(canvas, w, h)
         }
         return bitmap
     }
@@ -129,6 +140,132 @@ object BuiltInWallpapers {
             }
             canvas.drawPath(path, paint().apply { this.color = color })
         }
+    }
+
+    /** Warm multi-stop sunset gradient with a low sun and a thin horizon. */
+    private fun sunset(canvas: Canvas, w: Float, h: Float) {
+        val stops = floatArrayOf(0f, 0.4f, 0.7f, 1f)
+        val colors = intArrayOf(0xFF2A1A4A.toInt(), 0xFFB5478B.toInt(), 0xFFF2714E.toInt(), 0xFFFBC87D.toInt())
+        canvas.drawRect(0f, 0f, w, h, paint().apply { shader = LinearGradient(0f, 0f, 0f, h, colors, stops, Shader.TileMode.CLAMP) })
+        canvas.drawCircle(w * 0.5f, h * 0.74f, w * 0.22f, paint().apply { color = 0x66FFFFFF })
+        canvas.drawRect(0f, h * 0.82f, w, h, paint().apply { color = 0xFF3A1E45.toInt() })
+    }
+
+    /** A soft "mesh gradient": overlapping blurred colour blobs over a base, a trending look. */
+    private fun mesh(canvas: Canvas, w: Float, h: Float) {
+        canvas.drawRect(0f, 0f, w, h, paint().apply { color = 0xFF141026.toInt() })
+        val blobs = listOf(
+            Triple(0.2f, 0.2f, 0xFF6C5CE7.toInt()),
+            Triple(0.85f, 0.25f, 0xFFE84393.toInt()),
+            Triple(0.25f, 0.8f, 0xFF00B894.toInt()),
+            Triple(0.8f, 0.85f, 0xFFFDAA5D.toInt()),
+        )
+        blobs.forEach { (fx, fy, c) ->
+            canvas.drawCircle(w * fx, h * fy, max(w, h) * 0.45f, paint().apply {
+                shader = RadialGradient(w * fx, h * fy, max(w, h) * 0.45f, (c and 0xFFFFFF) or 0xAA000000.toInt(), c and 0xFFFFFF, Shader.TileMode.CLAMP)
+            })
+        }
+    }
+
+    /** Near-black AMOLED with one faint corner glow: saves power, very popular. */
+    private fun amoled(canvas: Canvas, w: Float, h: Float) {
+        canvas.drawRect(0f, 0f, w, h, paint().apply { color = 0xFF000000.toInt() })
+        canvas.drawCircle(w * 0.8f, h * 0.18f, max(w, h) * 0.6f, paint().apply {
+            shader = RadialGradient(w * 0.8f, h * 0.18f, max(w, h) * 0.6f, 0x332979FF, 0x00000000, Shader.TileMode.CLAMP)
+        })
+    }
+
+    /** Layered purple mountain silhouettes with a pale sky. */
+    private fun peaks(canvas: Canvas, w: Float, h: Float) {
+        sky(canvas, w, h, 0xFFF3D9E7.toInt(), 0xFFC9B6E4.toInt())
+        canvas.drawCircle(w * 0.3f, h * 0.28f, w * 0.12f, paint().apply { color = 0x66FFFFFF })
+        val colors = intArrayOf(0xFF9B7EBD.toInt(), 0xFF6D5A9E.toInt(), 0xFF4A3B74.toInt(), 0xFF2B2149.toInt())
+        colors.forEachIndexed { i, c -> peakRow(canvas, w, h, h * (0.45f + i * 0.14f), h * (0.08f - i * 0.01f), 3 + i, i * 7, c) }
+    }
+
+    /** A jagged mountain-like band whose top edge is a run of straight peaks. */
+    private fun peakRow(canvas: Canvas, w: Float, h: Float, baseline: Float, amp: Float, teeth: Int, seed: Int, color: Int) {
+        val random = Random(seed.toLong())
+        val path = Path().apply {
+            moveTo(0f, h)
+            lineTo(0f, baseline)
+            val step = w / teeth
+            var x = 0f
+            while (x < w) {
+                lineTo(x + step / 2, baseline - amp * (0.4f + random.nextFloat()))
+                lineTo(x + step, baseline + amp * 0.2f * random.nextFloat())
+                x += step
+            }
+            lineTo(w, h)
+            close()
+        }
+        canvas.drawPath(path, paint().apply { this.color = color })
+    }
+
+    /** Colourful low-poly triangles over a diagonal gradient. */
+    private fun lowPoly(canvas: Canvas, w: Float, h: Float) {
+        canvas.drawRect(0f, 0f, w, h, paint().apply {
+            shader = LinearGradient(0f, 0f, w, h, 0xFF1A2980.toInt(), 0xFF26D0CE.toInt(), Shader.TileMode.CLAMP)
+        })
+        val random = Random(23)
+        val cols = 4
+        val rows = 9
+        val cw = w / cols
+        val ch = h / rows
+        for (r in 0 until rows) for (c in 0 until cols) {
+            val x = c * cw
+            val y = r * ch
+            repeat(2) { t ->
+                val path = Path().apply {
+                    if (t == 0) { moveTo(x, y); lineTo(x + cw, y); lineTo(x, y + ch) } else { moveTo(x + cw, y); lineTo(x + cw, y + ch); lineTo(x, y + ch) }
+                    close()
+                }
+                canvas.drawPath(path, paint().apply { color = (random.nextInt(0x40) shl 24) or 0xFFFFFF })
+            }
+        }
+    }
+
+    /** Concentric rings radiating from a corner (sweep + stroke), a clean minimal look. */
+    private fun rings(canvas: Canvas, w: Float, h: Float) {
+        canvas.drawRect(0f, 0f, w, h, paint().apply {
+            shader = SweepGradient(w * 0.5f, h * 0.5f, intArrayOf(0xFF22223B.toInt(), 0xFF4A4E69.toInt(), 0xFF22223B.toInt()), null)
+        })
+        val cx = w * 0.5f
+        val cy = h * 0.42f
+        val ringPaint = paint().apply {
+            style = Paint.Style.STROKE
+            strokeWidth = w / 120
+            color = 0x33FFFFFF
+        }
+        val maxR = hypot(w.toDouble(), h.toDouble()).toFloat()
+        var r = w * 0.08f
+        while (r < maxR) {
+            canvas.drawCircle(cx, cy, r, ringPaint)
+            r += w * 0.09f
+        }
+    }
+
+    /** A colourful nebula: tinted clouds over a dark sky, with stars. */
+    private fun nebula(canvas: Canvas, w: Float, h: Float) {
+        canvas.drawRect(0f, 0f, w, h, paint().apply { color = 0xFF07060F.toInt() })
+        val clouds = listOf(
+            Triple(0.35f, 0.35f, 0xFF7B2FBE.toInt()),
+            Triple(0.6f, 0.55f, 0xFF2F6BBE.toInt()),
+            Triple(0.5f, 0.45f, 0xFFBE2F7B.toInt()),
+        )
+        clouds.forEach { (fx, fy, c) ->
+            canvas.drawCircle(w * fx, h * fy, max(w, h) * 0.4f, paint().apply {
+                shader = RadialGradient(w * fx, h * fy, max(w, h) * 0.4f, (c and 0xFFFFFF) or 0x55000000, 0x00000000, Shader.TileMode.CLAMP)
+            })
+        }
+        stars(canvas, w, h, 220, seed = 5)
+    }
+
+    /** Soft pastel waves on a light background. */
+    private fun pastel(canvas: Canvas, w: Float, h: Float) {
+        canvas.drawRect(0f, 0f, w, h, paint().apply { color = 0xFFFDF6F0.toInt() })
+        val colors = intArrayOf(0xFFFFD6E0.toInt(), 0xFFC7CEEA.toInt(), 0xFFB5EAD7.toInt(), 0xFFFFDAC1.toInt())
+        colors.forEachIndexed { i, c -> wave(canvas, w, h, h * (0.45f + i * 0.13f), h * 0.03f, 1f + i * 0.4f, i * 1.7f, c) }
     }
 
     private fun stars(canvas: Canvas, w: Float, h: Float, count: Int, seed: Int) {
