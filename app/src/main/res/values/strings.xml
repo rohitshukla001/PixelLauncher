@@ -59,4 +59,10 @@
     <string name="choose_language">Choose language</string>
     <string name="set_as_default_home">Set Pixel Launcher as default home app</string>
     <string name="version">Version %1$s</string>
+    <string name="lock_screen_offer_title">Home wallpaper changed</string>
+    <string name="lock_screen_offer_text">This phone doesn\'t let apps change the lock screen. You can try setting it in your phone\'s own wallpaper app.</string>
+    <string name="set_on_lock_screen">Set on lock screen</string>
+    <string name="not_now">Not now</string>
+    <string name="set_lock_screen_with">Set lock screen wallpaper with</string>
+    <string name="no_wallpaper_app">No app on this phone can set wallpapers</string>
 </resources>
