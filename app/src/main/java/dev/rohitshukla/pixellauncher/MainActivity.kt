@@ -4,11 +4,13 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
 import android.provider.AlarmClock
+import android.provider.Settings as AndroidSettings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -53,6 +55,11 @@ class MainActivity : ComponentActivity(), LauncherController {
         super.attachBaseContext(AppLanguage.wrap(newBase))
     }
 
+    override fun onRestart() {
+        super.onRestart()
+        if (!isDefaultHome()) askToBeDefaultHome()
+    }
+
     override fun onResume() {
         super.onResume()
         // Before Android 13, a language picked in Settings reaches home when it next comes to the front.
@@ -70,7 +77,11 @@ class MainActivity : ComponentActivity(), LauncherController {
         // First run: Yomo's "Choose wallpaper" screen comes before anything else.
         if (savedInstanceState == null) {
             lifecycleScope.launch {
-                if (!settingsRepo.settings.first().setupComplete) startActivity(WallpaperActivity.intent(this@MainActivity, firstRun = true))
+                if (!settingsRepo.settings.first().setupComplete) {
+                    startActivity(WallpaperActivity.intent(this@MainActivity, firstRun = true))
+                } else if (!isDefaultHome()) {
+                    askToBeDefaultHome()
+                }
             }
         }
         setContent {
@@ -104,7 +115,14 @@ class MainActivity : ComponentActivity(), LauncherController {
 
     override fun launch(app: AppEntry, sourceBounds: Rect) {
         val bounds = sourceBounds.takeUnless { it.isEmpty }
-        if (appRepo.launch(app, bounds)) {
+        // Pixel Launcher's own icon opens its Settings, as Yomo's does.
+        val opened = if (app.isSelf) {
+            startActivity(Intent(this, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } else {
+            appRepo.launch(app, bounds)
+        }
+        if (opened) {
             lifecycleScope.launch { usageRepo.recordLaunch(app.key) }
         } else {
             toast(getString(R.string.cannot_open_app, app.label))
@@ -119,7 +137,10 @@ class MainActivity : ComponentActivity(), LauncherController {
 
     override fun uninstall(app: AppEntry) {
         try {
-            startActivity(Intent(Intent.ACTION_DELETE, Uri.fromParts("package", app.packageName, null)))
+            startActivity(
+                Intent(Intent.ACTION_DELETE, Uri.fromParts("package", app.packageName, null))
+                    .putExtra(Intent.EXTRA_USER, appRepo.userFor(app)),
+            )
         } catch (e: ActivityNotFoundException) {
             toast(getString(R.string.cannot_open_app, app.label))
         }
@@ -149,7 +170,8 @@ class MainActivity : ComponentActivity(), LauncherController {
     override fun fitHome(grid: GridSize) {
         lifecycleScope.launch {
             homeRepo.fitTo(grid, installedKeys())
-            homeRepo.seedSettingsShortcut("$packageName/${SettingsActivity::class.java.name}", grid)
+            // The Pixel Launcher icon, which opens Settings.
+            homeRepo.seedSettingsShortcut("$packageName/${MainActivity::class.java.name}", grid)
         }
     }
 
@@ -175,6 +197,22 @@ class MainActivity : ComponentActivity(), LauncherController {
         } catch (e: ActivityNotFoundException) {
             toast(getString(R.string.clock_app_not_found))
         }
+    }
+
+    private fun isDefaultHome(): Boolean {
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        return packageManager.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName == packageName
+    }
+
+    /** As in Yomo: say so, open Android's Home app setting, and close. */
+    private fun askToBeDefaultHome() {
+        toast(getString(R.string.set_as_default_home))
+        try {
+            startActivity(Intent(AndroidSettings.ACTION_HOME_SETTINGS))
+        } catch (e: ActivityNotFoundException) {
+            startActivity(Intent(AndroidSettings.ACTION_SETTINGS))
+        }
+        finish()
     }
 
     /** As in Yomo: phones stay in their natural orientation; tablets (520 dp and wider) rotate. */

@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.os.UserHandle
+import android.os.UserManager
 import java.text.Collator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,14 +20,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Installed launchable apps for this user, kept current as apps are installed, updated or removed. */
+/**
+ * Installed launchable apps in every profile on the phone (personal and work), kept current as
+ * apps are installed, updated or removed. As in Yomo, each package shows once, personal first.
+ */
 class AppRepository(context: Context, private val icons: IconCache) {
 
     data class State(val loaded: Boolean = false, val apps: List<AppEntry> = emptyList(), val dock: List<AppEntry> = emptyList())
 
     private val appContext = context.applicationContext
     private val launcherApps = appContext.getSystemService(LauncherApps::class.java)
-    private val user: UserHandle = Process.myUserHandle()
+    private val userManager = appContext.getSystemService(UserManager::class.java)
+    private val me: UserHandle = Process.myUserHandle()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val refreshLock = Mutex()
 
@@ -54,14 +59,27 @@ class AppRepository(context: Context, private val icons: IconCache) {
         scope.launch {
             refreshLock.withLock {
                 val collator = Collator.getInstance()
-                val apps = launcherApps.getActivityList(null, user)
-                    .map {
-                        AppEntry(
-                            label = it.label.toString(),
-                            packageName = it.componentName.packageName,
-                            className = it.componentName.className,
-                            isSystem = it.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0,
-                        )
+                val pm = appContext.packageManager
+                val appLabels = mutableMapOf<String, String>()
+                val apps = launcherApps.profiles
+                    .sortedBy { if (it == me) 0 else 1 }
+                    .flatMap { user ->
+                        val serial = userManager.getSerialNumberForUser(user)
+                        launcherApps.getActivityList(null, user).map {
+                            appLabels.getOrPut(it.componentName.packageName) { it.applicationInfo.loadLabel(pm).toString() }
+                            AppEntry(
+                                label = it.label.toString(),
+                                packageName = it.componentName.packageName,
+                                className = it.componentName.className,
+                                isSystem = it.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0,
+                                isSelf = it.componentName.packageName == appContext.packageName,
+                                profile = serial,
+                            )
+                        }
+                    }
+                    // The main icon is the one named like the app, else the one Android opens for it.
+                    .let { all ->
+                        onePerPackage(all) { e -> e.label == appLabels[e.packageName] || e.className == mainActivityClass(e.packageName) }
                     }
                     .sortedWith { a, b -> collator.compare(a.label, b.label) }
                 val dock = DockApps.pick(DockApps.defaultPackages(appContext.packageManager), apps)
@@ -72,7 +90,7 @@ class AppRepository(context: Context, private val icons: IconCache) {
 
     /** Opens the app. Returns false when it can no longer be started (removed or disabled). */
     fun launch(app: AppEntry, sourceBounds: Rect?): Boolean = try {
-        launcherApps.startMainActivity(app.component, user, sourceBounds, null)
+        launcherApps.startMainActivity(app.component, userFor(app), sourceBounds, null)
         true
     } catch (e: SecurityException) {
         false
@@ -82,13 +100,20 @@ class AppRepository(context: Context, private val icons: IconCache) {
 
     /** Opens Android's App info screen for the app. */
     fun openAppInfo(app: AppEntry, sourceBounds: Rect?): Boolean = try {
-        launcherApps.startAppDetailsActivity(app.component, user, sourceBounds, null)
+        launcherApps.startAppDetailsActivity(app.component, userFor(app), sourceBounds, null)
         true
     } catch (e: SecurityException) {
         false
     } catch (e: android.content.ActivityNotFoundException) {
         false
     }
+
+    /** The activity Android opens for the package, or null when it cannot tell. */
+    private fun mainActivityClass(packageName: String): String? =
+        appContext.packageManager.getLaunchIntentForPackage(packageName)?.component?.className
+
+    /** The profile the app lives in; personal if that profile is gone. */
+    fun userFor(app: AppEntry): UserHandle = userManager.getUserForSerialNumber(app.profile) ?: me
 
     private fun changed(packageName: String) {
         icons.invalidate(packageName)
