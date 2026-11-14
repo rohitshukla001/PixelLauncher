@@ -30,6 +30,35 @@ enum class SearchEngine(val label: String) {
     }
 }
 
+/**
+ * A wallpaper the launcher draws itself, behind home, because the phone did not let it set the
+ * system wallpaper (as Yomo does on restricted phones). Null: the system wallpaper shows.
+ */
+sealed interface OwnWallpaper {
+    data class BuiltIn(val index: Int) : OwnWallpaper
+
+    /** The cropped photo, saved in the app's own storage as [FILE_NAME]; [version] changes with each new photo. */
+    data class Custom(val version: Long) : OwnWallpaper
+
+    companion object {
+        const val FILE_NAME = "wallpaper.jpg"
+
+        fun encode(value: OwnWallpaper): String = when (value) {
+            is BuiltIn -> "builtin:${value.index}"
+            is Custom -> "custom:${value.version}"
+        }
+
+        fun decode(stored: String?): OwnWallpaper? {
+            val (kind, number) = stored?.split(':', limit = 2)?.takeIf { it.size == 2 } ?: return null
+            return when (kind) {
+                "builtin" -> number.toIntOrNull()?.let(::BuiltIn)
+                "custom" -> number.toLongOrNull()?.let(::Custom)
+                else -> null
+            }
+        }
+    }
+}
+
 /** Yomo's defaults: clock centred, search bar off, suggestions on, Google. */
 data class LauncherSettings(
     val clockAlignment: ClockAlignment = ClockAlignment.Center,
@@ -38,6 +67,7 @@ data class LauncherSettings(
     val searchEngine: SearchEngine = SearchEngine.Google,
     /** False until the first-run wallpaper screen is done. */
     val setupComplete: Boolean = false,
+    val ownWallpaper: OwnWallpaper? = null,
 )
 
 class SettingsRepository(private val store: DataStore<Preferences>) {
@@ -54,12 +84,18 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
 
     suspend fun completeSetup() = store.edit { it[SETUP_COMPLETE] = true }
 
+    /** Null when the system wallpaper was set, so the launcher shows it again. */
+    suspend fun setOwnWallpaper(value: OwnWallpaper?) = store.edit { p ->
+        if (value == null) p.remove(OWN_WALLPAPER) else p[OWN_WALLPAPER] = OwnWallpaper.encode(value)
+    }
+
     private fun read(p: Preferences) = LauncherSettings(
         clockAlignment = enumOrDefault(p[ALIGNMENT], ClockAlignment.Center),
         searchBarEnabled = p[SEARCH_BAR] ?: false,
         suggestionsEnabled = p[SUGGESTIONS] ?: true,
         searchEngine = enumOrDefault(p[ENGINE], SearchEngine.Google),
         setupComplete = p[SETUP_COMPLETE] ?: false,
+        ownWallpaper = OwnWallpaper.decode(p[OWN_WALLPAPER]),
     )
 
     private inline fun <reified T : Enum<T>> enumOrDefault(name: String?, default: T): T =
@@ -71,5 +107,6 @@ class SettingsRepository(private val store: DataStore<Preferences>) {
         val SUGGESTIONS = booleanPreferencesKey("suggestions_enabled")
         val ENGINE = stringPreferencesKey("search_engine")
         val SETUP_COMPLETE = booleanPreferencesKey("setup_complete")
+        val OWN_WALLPAPER = stringPreferencesKey("own_wallpaper")
     }
 }

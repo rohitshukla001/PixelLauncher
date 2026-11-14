@@ -213,6 +213,8 @@ fun LauncherScreen(
                 )
             },
     ) {
+        OwnWallpaperBackground(settings.ownWallpaper)
+
         HomeScreen(
             searchBarEnabled = settings.searchBarEnabled,
             header = {

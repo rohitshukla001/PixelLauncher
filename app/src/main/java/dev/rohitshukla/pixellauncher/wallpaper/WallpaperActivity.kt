@@ -9,6 +9,7 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import java.io.File
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.WindowManager
@@ -84,6 +85,7 @@ import kotlin.math.roundToInt
 import androidx.lifecycle.lifecycleScope
 import dev.rohitshukla.pixellauncher.R
 import dev.rohitshukla.pixellauncher.data.AppData
+import dev.rohitshukla.pixellauncher.data.OwnWallpaper
 import dev.rohitshukla.pixellauncher.settings.AppLanguage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -93,6 +95,7 @@ import kotlinx.coroutines.withContext
  * Yomo's wallpaper screens. First run: "Choose wallpaper" from the built-in ones, then Continue.
  * From Settings: the same choices plus "Set custom wallpaper" (pick a photo, crop it), then Submit.
  * Only the home screen wallpaper changes; the lock screen keeps its own (Yomo's FAQ explains why).
+ * Phones that block wallpaper changes still get it: the launcher draws it behind home.
  */
 class WallpaperActivity : ComponentActivity() {
 
@@ -114,58 +117,73 @@ class WallpaperActivity : ComponentActivity() {
                         applying = applying,
                         screenWidth = screenWidth(),
                         screenHeight = screenHeight(),
-                        onBuiltIn = { index -> apply(firstRun) { BuiltInWallpapers.render(index, screenWidth(), screenHeight()) } },
-                        onCustom = { make -> apply(firstRun, make) },
+                        onBuiltIn = { index ->
+                            apply(firstRun, OwnWallpaper.BuiltIn(index)) { BuiltInWallpapers.render(index, screenWidth(), screenHeight()) }
+                        },
+                        onCustom = { make -> apply(firstRun, OwnWallpaper.Custom(System.currentTimeMillis()), make) },
                     )
                 }
             }
         }
     }
 
-    private sealed interface Outcome {
-        data object Changed : Outcome
-
-        /** The phone's policy (an admin or a user restriction) does not let apps change the wallpaper. */
-        data object Blocked : Outcome
-
-        data class Failed(val error: Throwable?) : Outcome
-    }
-
-    private fun apply(firstRun: Boolean, make: () -> Bitmap?) {
+    /**
+     * As Yomo does: set the system wallpaper when the phone allows it. When it doesn't (an admin or a
+     * restriction blocks it, or the phone refuses), keep the choice and draw it behind home instead,
+     * so it still looks changed. The lock screen and Recents keep the system wallpaper either way.
+     */
+    private fun apply(firstRun: Boolean, choice: OwnWallpaper, make: () -> Bitmap?) {
         if (applying) return
         applying = true
         lifecycleScope.launch {
-            val manager = WallpaperManager.getInstance(this@WallpaperActivity)
-            val outcome = if (!manager.isSetWallpaperAllowed) {
-                Outcome.Blocked
-            } else {
-                withContext(Dispatchers.Default) {
-                    try {
-                        val bitmap = make() ?: return@withContext Outcome.Failed(null)
-                        manager.setBitmap(bitmap, null, true, WallpaperManager.FLAG_SYSTEM)
-                        Outcome.Changed
-                    } catch (e: Exception) {
-                        // Phones differ here (IOException, SecurityException, OEM runtime errors); keep the reason.
-                        Outcome.Failed(e)
+            val settings = AppData.settings(this@WallpaperActivity)
+            var error: Throwable? = null
+            val done = withContext(Dispatchers.Default) {
+                val bitmap = try {
+                    make()
+                } catch (e: Exception) {
+                    error = e
+                    null
+                } ?: return@withContext false
+                if (setSystemWallpaper(bitmap)) {
+                    settings.setOwnWallpaper(null)
+                    return@withContext true
+                }
+                try {
+                    if (choice is OwnWallpaper.Custom) {
+                        File(filesDir, OwnWallpaper.FILE_NAME).outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }
                     }
+                    settings.setOwnWallpaper(choice)
+                    true
+                } catch (e: java.io.IOException) {
+                    error = e
+                    false
                 }
             }
             applying = false
-            if (outcome is Outcome.Failed) Log.w(TAG, "Setting the wallpaper failed", outcome.error)
-
-            val message = when (outcome) {
-                Outcome.Changed -> if (firstRun) null else getString(R.string.wallpaper_changed)
-                Outcome.Blocked -> getString(R.string.wallpaper_blocked)
-                is Outcome.Failed -> getString(R.string.wallpaper_not_changed) + debugDetail(outcome.error)
+            if (done) {
+                if (!firstRun) Toast.makeText(this@WallpaperActivity, R.string.wallpaper_changed, Toast.LENGTH_SHORT).show()
+            } else {
+                Log.w(TAG, "Changing the wallpaper failed", error)
+                Toast.makeText(this@WallpaperActivity, getString(R.string.wallpaper_not_changed) + debugDetail(error), Toast.LENGTH_LONG).show()
             }
-            message?.let { Toast.makeText(this@WallpaperActivity, it, Toast.LENGTH_LONG).show() }
-
-            // First run never traps you: if the wallpaper can't change, setup finishes with the current one
-            // (Yomo also goes on without it on managed phones). From Settings, you stay to try another.
-            if (outcome == Outcome.Changed || firstRun) {
-                if (firstRun) AppData.settings(this@WallpaperActivity).completeSetup()
+            // First run never traps you; from Settings, a failure leaves you on the screen to try again.
+            if (done || firstRun) {
+                if (firstRun) settings.completeSetup()
                 finish()
             }
+        }
+    }
+
+    /** False when the phone does not allow it or refuses (Yomo treats a zero id as refused too). */
+    private fun setSystemWallpaper(bitmap: Bitmap): Boolean {
+        val manager = WallpaperManager.getInstance(this)
+        if (!manager.isSetWallpaperAllowed) return false
+        return try {
+            manager.setBitmap(bitmap, null, true, WallpaperManager.FLAG_SYSTEM) != 0
+        } catch (e: Exception) {
+            Log.w(TAG, "The phone refused the system wallpaper; drawing it in the launcher instead", e)
+            false
         }
     }
 
