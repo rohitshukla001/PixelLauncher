@@ -19,3 +19,15 @@ data class AppEntry(
 
     val component: ComponentName get() = ComponentName(packageName, className)
 }
+
+/**
+ * One drawer entry per package, as in Yomo, with the personal profile first. Within a package it
+ * keeps the main icon ([isMain]), not just the first one listed, so a package with two icons
+ * (Google and Voice Search) shows its main one; with no main icon, the first one.
+ */
+fun onePerPackage(entries: List<AppEntry>, isMain: (AppEntry) -> Boolean): List<AppEntry> =
+    entries.groupBy { it.packageName }.values.map { sameApp ->
+        val profile = sameApp.first().profile
+        val candidates = sameApp.filter { it.profile == profile }
+        candidates.firstOrNull(isMain) ?: candidates.first()
+    }
