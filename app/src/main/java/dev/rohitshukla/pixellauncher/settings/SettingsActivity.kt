@@ -18,7 +18,6 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import dev.rohitshukla.pixellauncher.R
 import dev.rohitshukla.pixellauncher.data.AppData
-import dev.rohitshukla.pixellauncher.data.HomeRepository
 import dev.rohitshukla.pixellauncher.data.LauncherSettings
 import dev.rohitshukla.pixellauncher.wallpaper.WallpaperActivity
 import dev.rohitshukla.pixellauncher.data.AppEntry
@@ -52,7 +51,6 @@ class SettingsActivity : ComponentActivity(), SettingsController {
             val hasPattern by hiddenRepo.hasPattern.collectAsState<Boolean, Boolean?>(initial = null)
             val hidden by hiddenRepo.hiddenPackages.collectAsState(initial = emptySet())
             val settings by settingsRepo.settings.collectAsState(initial = LauncherSettings())
-            val language = remember { AppLanguage.current(this) }
             // One row per package, without this launcher (as in Yomo).
             val apps = remember(state.apps) {
                 state.apps.filter { it.packageName != packageName }.distinctBy { it.packageName }
@@ -65,7 +63,6 @@ class SettingsActivity : ComponentActivity(), SettingsController {
                     apps = apps,
                     hidden = hidden,
                     settings = settings,
-                    language = language,
                     icons = icons,
                     controller = this,
                     onExit = ::finish,
@@ -99,33 +96,9 @@ class SettingsActivity : ComponentActivity(), SettingsController {
         startActivity(WallpaperActivity.intent(this, firstRun = false))
     }
 
-    override fun addPage() {
-        lifecycleScope.launch {
-            toast(if (homeRepo.addPage()) R.string.added_shortcut_page else R.string.cannot_add_shortcut_page)
-        }
-    }
-
-    override fun removePage() {
-        lifecycleScope.launch {
-            toast(
-                when (homeRepo.removeLastPage()) {
-                    HomeRepository.PageRemoval.Removed -> R.string.removed_shortcut_page
-                    HomeRepository.PageRemoval.OnlyPage -> R.string.cannot_remove_shortcut_page
-                    HomeRepository.PageRemoval.NoRoom -> R.string.no_room_to_remove_page
-                },
-            )
-        }
-    }
-
     override fun setSearchBarEnabled(on: Boolean) {
         lifecycleScope.launch { settingsRepo.setSearchBarEnabled(on) }
     }
-
-    override fun setSuggestionsEnabled(on: Boolean) {
-        lifecycleScope.launch { settingsRepo.setSuggestionsEnabled(on) }
-    }
-
-    override fun setLanguage(option: AppLanguage.Option) = AppLanguage.set(this, option)
 
     override fun toast(message: Int) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()

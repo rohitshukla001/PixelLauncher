@@ -46,17 +46,7 @@
     <string name="wallpaper_number">Wallpaper %1$d</string>
     <string name="wallpaper_changed">Wallpaper badal diya gaya</string>
     <string name="wallpaper_not_changed">Wallpaper badal nahi paaya</string>
-    <string name="add_shortcuts_page">Shortcut page jodein</string>
-    <string name="remove_shortcuts_page">Shortcut page hatayein</string>
-    <string name="added_shortcut_page">Shortcut page jod diya</string>
-    <string name="cannot_add_shortcut_page">Aur shortcut pages nahi jod sakte</string>
-    <string name="removed_shortcut_page">Aakhri shortcut page hata diya</string>
-    <string name="cannot_remove_shortcut_page">Akela shortcut page nahi hata sakte</string>
-    <string name="no_room_to_remove_page">Is page ke apps ke liye baaki pages par jagah nahi hai</string>
     <string name="enable_search_bar">Search bar dikhayein</string>
-    <string name="enable_app_suggestions">App suggestions dikhayein</string>
-    <string name="change_language">Bhasha badlein</string>
-    <string name="choose_language">Bhasha chunein</string>
     <string name="set_as_default_home">Pixel Launcher ko default home app banayein</string>
     <string name="version">Version %1$s</string>
 </resources>

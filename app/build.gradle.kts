@@ -15,8 +15,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // Bump for every APK handed out for testing, so the tester can tell builds apart (shown in Settings).
-        versionCode = 6
-        versionName = "0.1.5"
+        versionCode = 7
+        versionName = "0.1.6"
     }
 
     // Release signing reads keystore.properties at the project root (kept out of git):

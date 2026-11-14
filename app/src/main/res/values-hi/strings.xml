@@ -46,17 +46,7 @@
     <string name="wallpaper_number">वॉलपेपर %1$d</string>
     <string name="wallpaper_changed">वॉलपेपर बदल दिया गया</string>
     <string name="wallpaper_not_changed">वॉलपेपर नहीं बदल सका</string>
-    <string name="add_shortcuts_page">शॉर्टकट पेज जोड़ें</string>
-    <string name="remove_shortcuts_page">शॉर्टकट पेज हटाएं</string>
-    <string name="added_shortcut_page">शॉर्टकट पेज जोड़ा गया</string>
-    <string name="cannot_add_shortcut_page">और शॉर्टकट पेज नहीं जोड़े जा सकते</string>
-    <string name="removed_shortcut_page">आखिरी शॉर्टकट पेज हटाया गया</string>
-    <string name="cannot_remove_shortcut_page">इकलौता शॉर्टकट पेज नहीं हटाया जा सकता</string>
-    <string name="no_room_to_remove_page">इस पेज के ऐप के लिए बाकी पेजों पर जगह नहीं है</string>
     <string name="enable_search_bar">सर्च बार दिखाएं</string>
-    <string name="enable_app_suggestions">ऐप सुझाव दिखाएं</string>
-    <string name="change_language">भाषा बदलें</string>
-    <string name="choose_language">भाषा चुनें</string>
     <string name="set_as_default_home">Pixel Launcher को डिफ़ॉल्ट होम ऐप बनाएं</string>
     <string name="version">संस्करण %1$s</string>
 </resources>
