@@ -58,4 +58,5 @@
     <string name="change_language">Change language</string>
     <string name="choose_language">Choose language</string>
     <string name="set_as_default_home">Set Pixel Launcher as default home app</string>
+    <string name="version">Version %1$s</string>
 </resources>
