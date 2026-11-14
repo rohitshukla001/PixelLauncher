@@ -42,11 +42,29 @@ data class GridSize(val columns: Int, val rows: Int, val headerRows: Int = 0) {
  * The home pages and the app in each cell. As in Yomo, the page count is stored on its own (a page
  * may be empty), there are 1 to [MAX_PAGES] pages, and the same app may sit in more than one cell.
  */
-data class HomeLayout(val pageCount: Int = 1, val shortcuts: Map<Cell, String> = emptyMap()) {
+data class HomeLayout(
+    val pageCount: Int = 1,
+    val shortcuts: Map<Cell, String> = emptyMap(),
+    /** The dock row, left to right. Fully user-managed. */
+    val dock: List<String> = emptyList(),
+) {
 
     fun keyAt(cell: Cell): String? = shortcuts[cell]
 
     fun isFree(cell: Cell): Boolean = cell !in shortcuts
+
+    /**
+     * Puts [key] in the dock at [index], moving it if it is already there. Null when the dock is full
+     * ([maxSlots]) and [key] is new, so a full dock refuses a new app but still allows reordering.
+     */
+    fun placeInDock(key: String, index: Int, maxSlots: Int): HomeLayout? {
+        val without = dock - key
+        if (key !in dock && without.size >= maxSlots) return null
+        val at = index.coerceIn(0, without.size)
+        return copy(dock = without.toMutableList().apply { add(at, key) })
+    }
+
+    fun removeFromDock(key: String): HomeLayout = copy(dock = dock - key)
 
     /** Null when the cell is taken or on a page that does not exist. */
     fun place(key: String, cell: Cell): HomeLayout? =
@@ -80,12 +98,17 @@ data class HomeLayout(val pageCount: Int = 1, val shortcuts: Map<Cell, String> =
         return layout
     }
 
-    /** Drops every shortcut of the package; used when it is hidden (as in Yomo). */
-    fun withoutPackage(packageName: String): HomeLayout =
-        copy(shortcuts = shortcuts.filterValues { !it.startsWith("$packageName/") })
+    /** Drops every shortcut of the package, from home and the dock; used when it is hidden (as in Yomo). */
+    fun withoutPackage(packageName: String): HomeLayout = copy(
+        shortcuts = shortcuts.filterValues { !it.startsWith("$packageName/") },
+        dock = dock.filter { !it.startsWith("$packageName/") },
+    )
 
-    /** Drops shortcuts of apps that are no longer installed, so their cells are free again. */
-    fun withoutMissing(installed: Set<String>): HomeLayout = copy(shortcuts = shortcuts.filterValues { it in installed })
+    /** Drops home and dock entries for apps that are no longer installed. */
+    fun withoutMissing(installed: Set<String>): HomeLayout = copy(
+        shortcuts = shortcuts.filterValues { it in installed },
+        dock = dock.filter { it in installed },
+    )
 
     /**
      * Moves shortcuts that are outside [grid] (the grid got smaller) to the first free cells,
@@ -118,13 +141,17 @@ data class HomeLayout(val pageCount: Int = 1, val shortcuts: Map<Cell, String> =
     fun encodeShortcuts(): Set<String> =
         shortcuts.map { (c, key) -> "${c.page},${c.row},${c.column}$SEPARATOR$key" }.toSet()
 
+    /** The dock as a single ordered string; keys never contain the separator. */
+    fun encodeDock(): String = dock.joinToString(DOCK_SEPARATOR)
+
     companion object {
         const val MAX_PAGES = 9
 
         private const val SEPARATOR = '|'
+        private const val DOCK_SEPARATOR = "\n"
 
         /** Skips entries it cannot read, so one bad value never empties the home screen. */
-        fun decode(pageCount: Int?, shortcuts: Set<String>?): HomeLayout {
+        fun decode(pageCount: Int?, shortcuts: Set<String>?, dock: String? = null): HomeLayout {
             val cells = shortcuts.orEmpty().mapNotNull { entry ->
                 val position = entry.substringBefore(SEPARATOR, "").split(',').map { it.toIntOrNull() }
                 val key = entry.substringAfter(SEPARATOR, "")
@@ -132,7 +159,8 @@ data class HomeLayout(val pageCount: Int = 1, val shortcuts: Map<Cell, String> =
                     ?.map { it!! } ?: return@mapNotNull null
                 if (key.isEmpty()) null else Cell(page, row, column) to key
             }.toMap()
-            return HomeLayout((pageCount ?: 1).coerceIn(1, MAX_PAGES), cells)
+            val dockKeys = dock?.split(DOCK_SEPARATOR)?.filter { it.isNotEmpty() }.orEmpty()
+            return HomeLayout((pageCount ?: 1).coerceIn(1, MAX_PAGES), cells, dockKeys)
         }
     }
 }

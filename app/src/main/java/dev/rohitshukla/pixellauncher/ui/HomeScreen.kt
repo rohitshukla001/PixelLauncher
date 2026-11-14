@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
@@ -40,7 +41,9 @@ class HomeDragUi(
     val active: Boolean,
     /** The cell whose app is being dragged; it is hidden while it moves. */
     val from: Cell?,
-    val callbacksFor: (AppEntry, Cell) -> DragCallbacks,
+    /** The dock index whose app is being dragged; that dock icon is hidden while it moves. */
+    val fromDock: Int?,
+    val callbacksFor: (app: AppEntry, from: Cell?, fromDock: Int?) -> DragCallbacks,
 )
 
 /**
@@ -53,12 +56,13 @@ fun HomeScreen(
     header: @Composable () -> Unit,
     layout: HomeLayout,
     appsByKey: Map<String, AppEntry>,
-    dock: List<AppEntry>,
+    dockApps: List<AppEntry>,
     icons: IconCache,
     pagerState: PagerState,
     drag: HomeDragUi,
     menuFor: (AppEntry) -> AppMenu,
     onPagerPlaced: (bounds: Rect) -> Unit,
+    onDockPlaced: (bounds: Rect) -> Unit,
     onGrid: (GridSize) -> Unit,
     controller: LauncherController,
     modifier: Modifier = Modifier,
@@ -81,7 +85,7 @@ fun HomeScreen(
 
         if (pagerState.pageCount > 1) PageDots(pagerState)
 
-        Dock(dock, icons, menuFor, controller)
+        Dock(dockApps, icons, drag, menuFor, onDockPlaced, controller)
     }
 }
 
@@ -112,7 +116,7 @@ private fun HomePage(
                                 icons = icons,
                                 onClick = { controller.launch(app, it) },
                                 modifier = Modifier.alpha(if (drag.from == cell) 0f else 1f),
-                                drag = drag.callbacksFor(app, cell),
+                                drag = drag.callbacksFor(app, cell, null),
                             )
                             drag.active -> EmptyCellHint()
                         }
@@ -155,21 +159,43 @@ private fun PageDots(pagerState: PagerState) {
     }
 }
 
-/** Long-press shows the app menu; dock apps are not dragged. */
+/**
+ * The user-managed dock. Each icon has the long-press menu and can be dragged (to rearrange, onto
+ * home, or to the Remove area). Apps drag in from the drawer or home. Always keeps a drop target
+ * even when empty.
+ */
 @Composable
-private fun Dock(dock: List<AppEntry>, icons: IconCache, menuFor: (AppEntry) -> AppMenu, controller: LauncherController) {
+private fun Dock(
+    dockApps: List<AppEntry>,
+    icons: IconCache,
+    drag: HomeDragUi,
+    menuFor: (AppEntry) -> AppMenu,
+    onDockPlaced: (bounds: Rect) -> Unit,
+    controller: LauncherController,
+) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier
+            .fillMaxWidth()
+            .height((IconCache.ICON_SIZE_DP + 24).dp)
+            .onGloballyPositioned { onDockPlaced(it.boundsInRoot()) }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (dock.isEmpty()) Spacer(Modifier.size(IconCache.ICON_SIZE_DP.dp))
-        dock.forEach { app ->
+        // Empty dock while dragging: a single hint so there is somewhere to drop.
+        if (dockApps.isEmpty()) {
+            if (drag.active) EmptyCellHint() else Spacer(Modifier.size(IconCache.ICON_SIZE_DP.dp))
+            return@Row
+        }
+        dockApps.forEachIndexed { index, app ->
             AppIcon(
                 app = app,
                 icons = icons,
                 onClick = { controller.launch(app, it) },
+                modifier = Modifier.alpha(if (drag.fromDock == index) 0f else 1f),
                 showLabel = false,
                 menu = menuFor(app),
+                drag = drag.callbacksFor(app, null, index),
             )
         }
     }

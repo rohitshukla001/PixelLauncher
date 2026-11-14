@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -108,7 +109,54 @@ class HomeRepository(private val store: DataStore<Preferences>) {
         return done
     }
 
-    private fun read(p: Preferences) = HomeLayout.decode(p[PAGES], p[SHORTCUTS])
+    enum class DockResult { Done, Full }
+
+    /**
+     * Drops [key] into the dock at [index] (reorder if it is already there). When it comes from a home
+     * cell, that cell is freed. Returns [DockResult.Full] when the dock is full and the app is new.
+     */
+    suspend fun dropOnDock(key: String, index: Int, fromCell: Cell?, maxSlots: Int, installed: Set<String>?): DockResult {
+        var result = DockResult.Full
+        store.edit { p ->
+            val ready = installed?.takeIf { it.isNotEmpty() }
+            val stored = ready?.let(read(p)::withoutMissing) ?: read(p)
+            val base = if (fromCell != null) stored.remove(fromCell) else stored
+            val next = base.placeInDock(key, index, maxSlots) ?: return@edit
+            write(p, next)
+            result = DockResult.Done
+        }
+        return result
+    }
+
+    /** Moves [key] out of the dock onto home cell [cell]. False when the cell is off-grid or taken. */
+    suspend fun dockToHome(key: String, cell: Cell, installed: Set<String>?): Boolean {
+        var done = false
+        store.edit { p ->
+            val grid = readGrid(p)
+            if (grid != null && !grid.contains(cell)) return@edit
+            val ready = installed?.takeIf { it.isNotEmpty() }
+            val stored = ready?.let(read(p)::withoutMissing) ?: read(p)
+            val next = stored.removeFromDock(key).place(key, cell) ?: return@edit
+            write(p, next)
+            done = true
+        }
+        return done
+    }
+
+    suspend fun removeFromDock(key: String) {
+        store.edit { p -> write(p, read(p).removeFromDock(key)) }
+    }
+
+    /** Fills the dock once with the phone's default apps, so it starts like Yomo's "Big Four". */
+    suspend fun seedDock(keys: List<String>) {
+        store.edit { p ->
+            if (p[DOCK_SEEDED] == true) return@edit
+            p[DOCK_SEEDED] = true
+            if (keys.isNotEmpty()) p[DOCK] = keys.joinToString("\n")
+        }
+    }
+
+    private fun read(p: Preferences) = HomeLayout.decode(p[PAGES], p[SHORTCUTS], p[DOCK])
 
     private fun readGrid(p: Preferences): GridSize? {
         val columns = p[GRID_COLUMNS] ?: return null
@@ -119,11 +167,14 @@ class HomeRepository(private val store: DataStore<Preferences>) {
     private fun write(p: MutablePreferences, layout: HomeLayout) {
         p[PAGES] = layout.pageCount
         p[SHORTCUTS] = layout.encodeShortcuts()
+        p[DOCK] = layout.encodeDock()
     }
 
     private companion object {
         val PAGES = intPreferencesKey("home_pages")
         val SHORTCUTS = stringSetPreferencesKey("home_shortcuts")
+        val DOCK = stringPreferencesKey("home_dock")
+        val DOCK_SEEDED = booleanPreferencesKey("dock_seeded")
         val GRID_COLUMNS = intPreferencesKey("grid_columns")
         val GRID_ROWS = intPreferencesKey("grid_rows")
         val GRID_HEADER = intPreferencesKey("grid_header_rows")

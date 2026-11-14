@@ -77,6 +77,9 @@ interface LauncherController {
     fun placeShortcut(app: AppEntry, cell: Cell)
     fun moveShortcut(app: AppEntry, from: Cell, to: Cell)
     fun removeShortcut(app: AppEntry, cell: Cell)
+    fun dropOnDock(app: AppEntry, index: Int, fromCell: Cell?, maxSlots: Int)
+    fun dockToHome(app: AppEntry, cell: Cell)
+    fun removeFromDock(app: AppEntry)
 
     /** False at the page limit. */
     suspend fun addPage(): Boolean
@@ -106,6 +109,7 @@ fun LauncherScreen(
     var drawerClosesInstantly by remember { mutableStateOf(false) }
     var drag by remember { mutableStateOf<DragSession?>(null) }
     var pagerBounds by remember { mutableStateOf(Rect.Zero) }
+    var dockBounds by remember { mutableStateOf(Rect.Zero) }
     var grid by remember { mutableStateOf<GridSize?>(null) }
     var removeBounds by remember { mutableStateOf(Rect.Zero) }
     var dialog by remember { mutableStateOf<HomeDialog?>(null) }
@@ -113,8 +117,9 @@ fun LauncherScreen(
     val pagerState = rememberPagerState { layout.pageCount }
     // Hidden apps show nowhere in the launcher: not on home, in the dock, the drawer, search or Suggested.
     val visibleApps = remember(apps.apps, hiddenPackages) { apps.apps.filter { it.packageName !in hiddenPackages } }
-    val visibleDock = remember(apps.dock, hiddenPackages) { apps.dock.filter { it.packageName !in hiddenPackages } }
     val appsByKey = remember(visibleApps) { visibleApps.associateBy { it.key } }
+    // The dock is the user's stored list; uninstalled/hidden keys resolve to nothing and drop out.
+    val dockApps = remember(layout.dock, appsByKey) { layout.dock.mapNotNull(appsByKey::get) }
     val suggested = remember(launchCounts, visibleApps, settings.suggestionsEnabled) {
         if (settings.suggestionsEnabled) Suggestions.mostUsed(launchCounts, visibleApps) else emptyList()
     }
@@ -124,7 +129,10 @@ fun LauncherScreen(
 
     val dragging = drag != null
     val draggingFromHome = drag?.from != null
-    val draggingFromDrawer = dragging && !draggingFromHome
+    val draggingFromDock = drag?.fromDock != null
+    // A drag that can be removed (came from home or the dock) shows the Remove area.
+    val draggingPlaced = draggingFromHome || draggingFromDock
+    val draggingFromDrawer = dragging && !draggingPlaced
 
     // Home while already home: close the drawer and go back to the first page.
     LaunchedEffect(homePresses) {
@@ -163,19 +171,36 @@ fun LauncherScreen(
     }
 
     fun drop(d: DragSession) {
-        val from = d.from
-        if (from != null && removeBounds.contains(d.position)) {
-            controller.removeShortcut(d.app, from)
+        val fromHome = d.from
+        val fromDock = d.fromDock
+        // Dropped on the Remove area: take it out of wherever it came from.
+        if (removeBounds.contains(d.position)) {
+            when {
+                fromHome != null -> controller.removeShortcut(d.app, fromHome)
+                fromDock != null -> controller.removeFromDock(d.app)
+            }
             return
         }
+        // Dropped on the dock: add or rearrange. Capacity is how many icons the dock's width fits.
+        if (!dockBounds.isEmpty && dockBounds.contains(d.position)) {
+            val index = dockIndexAt(d.position, dockBounds, dockApps.size)
+            val maxSlots = (dockBounds.width / density.density / DOCK_SLOT_DP).toInt().coerceAtLeast(MIN_DOCK_SLOTS)
+            controller.dropOnDock(d.app, index, fromCell = fromHome, maxSlots = maxSlots)
+            return
+        }
+        // Dropped on a home cell.
         val cell = grid?.let { cellAt(d.position, pagerBounds, it, pagerState.currentPage) } ?: return
-        if (from == null) controller.placeShortcut(d.app, cell) else controller.moveShortcut(d.app, from, cell)
+        when {
+            fromHome != null -> controller.moveShortcut(d.app, fromHome, cell)
+            fromDock != null -> controller.dockToHome(d.app, cell)
+            else -> controller.placeShortcut(d.app, cell)
+        }
     }
 
-    fun dragCallbacks(app: AppEntry, from: Cell?) = DragCallbacks(
+    fun dragCallbacks(app: AppEntry, from: Cell? = null, fromDock: Int? = null) = DragCallbacks(
         onStart = { position ->
-            drag = DragSession(app, from, position)
-            if (from == null) {
+            drag = DragSession(app, from, fromDock, position)
+            if (from == null && fromDock == null) {
                 drawerClosesInstantly = true
                 drawerOpen = false
             }
@@ -229,12 +254,13 @@ fun LauncherScreen(
             },
             layout = layout,
             appsByKey = appsByKey,
-            dock = visibleDock,
+            dockApps = dockApps,
             icons = icons,
             pagerState = pagerState,
-            drag = HomeDragUi(active = dragging, from = drag?.from, callbacksFor = ::dragCallbacks),
+            drag = HomeDragUi(active = dragging, from = drag?.from, fromDock = drag?.fromDock, callbacksFor = ::dragCallbacks),
             menuFor = ::menuFor,
             onPagerPlaced = { pagerBounds = it },
+            onDockPlaced = { dockBounds = it },
             onGrid = { grid = it },
             controller = controller,
             modifier = Modifier.systemBarsPadding(),
@@ -259,7 +285,7 @@ fun LauncherScreen(
             )
         }
 
-        if (draggingFromHome) {
+        if (draggingPlaced) {
             RemoveArea(
                 hovered = drag?.let { removeBounds.contains(it.position) } == true,
                 modifier = Modifier
@@ -297,6 +323,13 @@ fun LauncherScreen(
         )
         null -> Unit
     }
+}
+
+/** The dock insertion index (0..[count]) for a drop at [point] across the dock row. */
+internal fun dockIndexAt(point: Offset, dock: Rect, count: Int): Int {
+    if (dock.isEmpty || count == 0) return 0
+    val fraction = ((point.x - dock.left) / dock.width).coerceIn(0f, 1f)
+    return (fraction * count).roundToInt().coerceIn(0, count)
 }
 
 /** -1 near the left edge, 1 near the right edge, 0 elsewhere or outside the pager. */
@@ -376,6 +409,8 @@ private fun DragShadow(drag: DragSession, icons: IconCache) {
 
 private val OPEN_SWIPE = 64.dp
 private val PAGE_EDGE = 32.dp
+private const val DOCK_SLOT_DP = 64f
+private const val MIN_DOCK_SLOTS = 4
 private const val EDGE_HOLD_MS = 500L
 private const val NEW_PAGE_TIMEOUT_MS = 1000L
 private const val EDGE_POLL_MS = 50L

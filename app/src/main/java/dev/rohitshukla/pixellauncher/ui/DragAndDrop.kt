@@ -10,8 +10,11 @@ import dev.rohitshukla.pixellauncher.data.AppEntry
 import dev.rohitshukla.pixellauncher.data.Cell
 import dev.rohitshukla.pixellauncher.data.GridSize
 
-/** One drag in progress. [from] is the home cell, or null when the app comes from the drawer. */
-data class DragSession(val app: AppEntry, val from: Cell?, val position: Offset)
+/**
+ * One drag in progress. [from] is the home cell it started on; [fromDock] is its dock index; both
+ * null when it comes from the drawer.
+ */
+data class DragSession(val app: AppEntry, val from: Cell?, val fromDock: Int?, val position: Offset)
 
 /** Drag events, with positions in root coordinates. */
 class DragCallbacks(

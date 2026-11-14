@@ -28,6 +28,7 @@ import dev.rohitshukla.pixellauncher.data.Cell
 import dev.rohitshukla.pixellauncher.data.ClockAlignment
 import dev.rohitshukla.pixellauncher.data.GridSize
 import dev.rohitshukla.pixellauncher.data.HomeLayout
+import dev.rohitshukla.pixellauncher.data.HomeRepository
 import dev.rohitshukla.pixellauncher.data.LauncherSettings
 import dev.rohitshukla.pixellauncher.data.SearchEngine
 import dev.rohitshukla.pixellauncher.search.SearchActivity
@@ -88,8 +89,12 @@ class MainActivity : ComponentActivity(), LauncherController {
         setContent {
             val apps by appRepo.state.collectAsState()
             // Once the app list loads, drop launch counts for apps that are no longer installed.
-            LaunchedEffect(apps.loaded, apps.apps) {
-                if (apps.loaded) usageRepo.prune(apps.apps.mapTo(HashSet()) { it.key })
+            LaunchedEffect(apps.loaded, apps.apps, apps.dock) {
+                if (apps.loaded) {
+                    usageRepo.prune(apps.apps.mapTo(HashSet()) { it.key })
+                    // First run only: start the dock with the phone's default apps.
+                    homeRepo.seedDock(apps.dock.map { it.key })
+                }
             }
             // Null until loaded: the grid depends on the search bar setting, so home waits for it.
             val settings by settingsRepo.settings.collectAsState<LauncherSettings, LauncherSettings?>(initial = null)
@@ -166,6 +171,27 @@ class MainActivity : ComponentActivity(), LauncherController {
     override fun removeShortcut(app: AppEntry, cell: Cell) {
         lifecycleScope.launch {
             homeRepo.remove(cell)
+            toast(getString(R.string.removed_shortcut, app.label))
+        }
+    }
+
+    override fun dropOnDock(app: AppEntry, index: Int, fromCell: Cell?, maxSlots: Int) {
+        lifecycleScope.launch {
+            if (homeRepo.dropOnDock(app.key, index, fromCell, maxSlots, installedKeys()) == HomeRepository.DockResult.Full) {
+                toast(getString(R.string.dock_full))
+            }
+        }
+    }
+
+    override fun dockToHome(app: AppEntry, cell: Cell) {
+        lifecycleScope.launch {
+            if (!homeRepo.dockToHome(app.key, cell, installedKeys())) toast(getString(R.string.no_room_for_shortcut))
+        }
+    }
+
+    override fun removeFromDock(app: AppEntry) {
+        lifecycleScope.launch {
+            homeRepo.removeFromDock(app.key)
             toast(getString(R.string.removed_shortcut, app.label))
         }
     }
